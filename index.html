@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Travel Companion - World Explorer</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app">
+      <!-- Google Maps Street View Container -->
+      <div id="street-view"></div>
+
+      <!-- UI Layers -->
+      <div class="ui-overlay">
+        <header class="top-bar">
+          <div class="logo">
+            <h1 style="color: white; margin: 0; font-size: 24px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">World Explorer</h1>
+          </div>
+          <div class="search-container">
+            <input type="text" id="search-input" placeholder="어디로 여행을 떠나볼까요?">
+            <button id="search-button">검색</button>
+          </div>
+        </header>
+
+        <main class="companion-section">
+          <div class="companion-container">
+            <div id="companion-dialog" class="dialog-bubble">
+              안녕! 오늘은 어디를 여행해볼까? 마음에 드는 곳을 검색해봐!
+            </div>
+            <div id="companion-avatar" class="companion-avatar">
+              🤖
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
