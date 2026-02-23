@@ -1,4 +1,17 @@
 import './style.css';
+import { CompanionSetup } from './src/setup.js';
+import { GeminiService } from './src/gemini.js';
+import { InfoPanel } from './src/info.js';
+import { SnapshotManager } from './src/snapshot.js';
+
+let panorama;
+let companionDialog;
+let companionPersona = {};
+let gemini;
+let infoPanel;
+let snapshotManager;
+let currentAddress = "Eiffel Tower";
+let surroundings = [];
 
 // Google Maps API Loader
 const loadGoogleMaps = (apiKey) => {
@@ -20,9 +33,6 @@ const loadGoogleMaps = (apiKey) => {
         };
     });
 };
-
-let panorama;
-let companionDialog;
 
 async function startTravel() {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -76,6 +86,54 @@ async function startTravel() {
             });
         };
 
+        // Initialize Modules
+        const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        gemini = new GeminiService(geminiKey, companionPersona);
+        infoPanel = new InfoPanel();
+        snapshotManager = new SnapshotManager(panorama);
+
+        snapshotManager.init((file) => {
+            updateCompanionWithAI(`이 사진 어때? 우리 여기서 같이 찍은 것처럼 만들어줘! (파일: ${file.name})`);
+        });
+
+        // TTS setup
+        const speakText = (text) => {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ko-KR';
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+        };
+
+        const updateCompanionWithAI = async (userInput) => {
+            if (!geminiKey) {
+                updateCompanionText("앗, Gemini API 키가 없어서 대화를 할 수 없어...");
+                return;
+            }
+            updateCompanionText("음...");
+            const response = await gemini.generateResponse(userInput, currentAddress, surroundings);
+            updateCompanionText(response);
+            speakText(response);
+        };
+
+        const performNearbySearch = (location) => {
+            const request = {
+                location: location,
+                radius: '500',
+                type: ['restaurant', 'tourist_attraction']
+            };
+            const service = new maps.places.PlacesService(document.createElement('div'));
+            service.nearbySearch(request, (results, status) => {
+                if (status === maps.places.PlacesServiceStatus.OK) {
+                    surroundings = results.map(r => r.name);
+                    infoPanel.updatePlaces(results);
+                }
+            });
+        };
+
+        // Initial search
+        performNearbySearch(initialPosition);
+
         // Audio Context for feedback
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const playTone = (freq, type, duration) => {
@@ -105,19 +163,13 @@ async function startTravel() {
 
         // Companion interaction
         const avatar = document.getElementById('companion-avatar');
+        // Set generated avatar
+        avatar.innerHTML = `<img src="/assets/companion.png" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+        avatar.style.background = 'none';
+
         avatar.addEventListener('click', () => {
             playTone(660, 'triangle', 0.3);
-            const messages = [
-                "지도는 잘 보고 있어?",
-                "와, 공기가 정말 상쾌한 것 같아!",
-                "다음은 어디로 가볼까? 네가 가고 싶은 곳이면 어디든 좋아!",
-                "스트리트 뷰로 세상을 구경하는 건 정말 즐거워!",
-                "나랑 같이 여행해줘서 고마워!",
-                "내 머리를 클릭하면 기분이 좋아져!",
-                "어디든 좋은 곳이 있으면 나에게도 알려줘!"
-            ];
-            const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-            updateCompanionText(randomMsg);
+            updateCompanionWithAI("안녕! 궁금한 게 있어.");
 
             // Avatar bounce animation
             avatar.style.transform = 'scale(1.2)';
@@ -127,11 +179,22 @@ async function startTravel() {
         // Update panorama location event
         panorama.addListener('position_changed', () => {
             const pos = panorama.getPosition();
-            console.log('Moved to:', pos.lat(), pos.lng());
+
+            // Perform nearby search
+            performNearbySearch(pos);
+
+            // Use Geocoder to get address
+            const geocoder = new maps.Geocoder();
+            geocoder.geocode({ location: pos }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                    currentAddress = results[0].formatted_address;
+                    console.log('Current Address:', currentAddress);
+                }
+            });
+
             // Small chance to say something when moving
             if (Math.random() > 0.8) {
-                const moveMsgs = ["오! 저기도 괜찮아 보이는데?", "계속 가보자!", "여기 분위기 좋은걸?"];
-                updateCompanionText(moveMsgs[Math.floor(Math.random() * moveMsgs.length)]);
+                updateCompanionWithAI("여기 주변은 어때?");
             }
         });
 
@@ -147,5 +210,18 @@ function updateCompanionText(text) {
     }
 }
 
-// Start the app
-startTravel();
+// Replace the manual startTravel call with Setup initiation
+const initApp = () => {
+    new CompanionSetup(async (data) => {
+        companionPersona = data;
+        console.log('Companion Data:', data);
+
+        // In a real scenario, we'd use generate_image here via the agent, 
+        // but for the app runtime, we'll assume the image is generated or use a placeholder.
+        // For this task, I will generate the image now.
+
+        await startTravel();
+    });
+};
+
+initApp();
