@@ -5,11 +5,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useTravel } from '../context/TravelContext';
-import { MessageSquare, Send, MapPin, Loader2, Volume2, VolumeX, Heart, Sparkles, Mic, MicOff, Phone, PhoneOff, Camera, Navigation, Utensils, RotateCcw, ChevronRight } from 'lucide-react';
+import { MessageSquare, Send, MapPin, Loader2, Volume2, VolumeX, Heart, Sparkles, Mic, MicOff, Phone, PhoneOff, Camera, Navigation, Utensils, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function TravelSidebar() {
-  const { state, sendMessage, stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession, moveTo } = useTravel();
+  const { state, sendMessage, stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession } = useTravel();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -68,8 +68,7 @@ export default function TravelSidebar() {
         <div>
           <h1 className={`text-2xl font-extrabold tracking-tight flex items-center gap-2 font-display transition-colors ${isLiveMode ? 'text-emerald-600' : 'text-pink-600'}`}>
             <Heart className={`w-6 h-6 transition-colors ${isLiveMode ? 'fill-emerald-600' : 'fill-pink-600'}`} />
-            Luna
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 align-middle">v2.5</span>
+            Aura
           </h1>
           <div className="flex items-center gap-1 mt-1">
             <MapPin className="w-3 h-3 text-slate-400" />
@@ -81,10 +80,10 @@ export default function TravelSidebar() {
         <div className="flex items-center gap-2">
           <button
             onClick={resetSession}
-            className="p-2 rounded-full bg-slate-50 text-slate-400 hover:text-pink-500 hover:bg-pink-50 transition-all"
-            title="새 여행 시작 (경복궁으로 이동)"
+            className="p-2 rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
+            title="Reset Context"
           >
-            <RotateCcw className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" />
           </button>
 
           <button
@@ -129,7 +128,7 @@ export default function TravelSidebar() {
               <Sparkles className="w-8 h-8 text-pink-600" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Hi, I'm Luna!</h3>
+              <h3 className="font-bold text-slate-900">Hi, I'm Aura!</h3>
               <p className="text-sm text-slate-500 mt-1">
                 Where should we go today? I can tell you about any place in the world, find great food, or just chat while we explore.
               </p>
@@ -151,81 +150,41 @@ export default function TravelSidebar() {
                   : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
                   }`}
               >
-                <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {msg.text.split(/(\[\[PLACE:.*?\]\]|\[.*?\]\(.*?\))/).map((part, i) => {
-                    const placeMatch = part.match(/^\[\[PLACE:\s*(.+?)\]\]$/);
-                    if (placeMatch) {
-                      const placeName = placeMatch[1];
-                      // Find coordinates if they exist in nearbyPlaces, otherwise just use name for geocoding later
-                      const foundPlace = state.nearbyPlaces.find(p => p.name === placeName);
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (foundPlace) {
-                              moveTo(foundPlace.location, foundPlace.name);
-                            } else {
-                              // If not in state yet, geocode by name
-                              if (typeof google !== 'undefined' && google.maps?.Geocoder) {
-                                const geocoder = new google.maps.Geocoder();
-                                geocoder.geocode({ address: placeName, location: state.currentLocation }, (results, status) => {
-                                  if (status === 'OK' && results?.[0]) {
-                                    const loc = results[0].geometry.location;
-                                    moveTo({ lat: loc.lat(), lng: loc.lng() } as any, placeName);
-                                  }
-                                });
-                              }
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-lg bg-pink-100 text-pink-700 font-bold hover:bg-pink-200 transition-colors shadow-sm cursor-pointer border border-pink-200 align-middle transform active:scale-95"
-                        >
-                          <MapPin className="w-3 h-3" />
-                          {placeName} 🏰
-                        </button>
-                      );
-                    }
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
 
-                    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-                    if (linkMatch) {
-                      const title = linkMatch[1];
-                      const url = linkMatch[2];
-                      return (
-                        <a
-                          key={i}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 mx-1 mt-1 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-emerald-100 hover:text-emerald-700 transition-colors shadow-sm cursor-pointer border border-slate-200 hover:border-emerald-300 align-middle transform active:scale-95 text-xs group decoration-transparent"
-                        >
-                          <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-emerald-500 shadow-sm group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                            <Navigation className="w-3 h-3" />
-                          </span>
-                          {title}
-                        </a>
-                      );
-                    }
-
-                    return part;
-                  })}
-                </div>
-
-                {/* Recommended Place Buttons - Explicit for model messages */}
+                {/* Place Suggestions UI - Interactive Cards */}
                 {msg.role === 'model' && state.nearbyPlaces.length > 0 &&
                   [...state.history].reverse().find(m => m.role === 'model')?.id === msg.id && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {state.nearbyPlaces.slice(-3).map((place) => (
-                        <button
-                          key={place.id}
-                          onClick={() => moveTo(place.location, place.name)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700 hover:bg-white hover:border-pink-300 hover:text-pink-600 hover:shadow-md transition-all text-xs font-bold group"
-                        >
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${place.type === 'restaurant' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
-                            {place.type === 'restaurant' ? <Utensils className="w-3 h-3" /> : <Camera className="w-3 h-3" />}
-                          </div>
-                          {place.name}
-                          <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                        </button>
-                      ))}
+                    <div className="mt-4 space-y-3">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1 pl-1">Aura's Pick</p>
+                      <div className="space-y-2">
+                        {state.nearbyPlaces
+                          .filter(place => {
+                            const dLat = place.location.lat - state.currentLocation.lat;
+                            const dLng = place.location.lng - state.currentLocation.lng;
+                            return Math.abs(dLat) < 1.0 && Math.abs(dLng) < 1.0;
+                          })
+                          .slice(-3).map((place) => (
+                            <button
+                              key={place.id}
+                              onClick={() => moveTo(place.location, place.name, true)}
+                              className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-pink-500/10 transition-all border border-slate-100 hover:border-pink-200 group ring-1 ring-transparent hover:ring-pink-500/20"
+                            >
+                              <div className="flex items-center gap-3 text-left">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner flex-shrink-0 ${place.type === 'restaurant' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                                  {place.type === 'restaurant' ? <Utensils className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-slate-900 line-clamp-1">{place.name}</p>
+                                  <p className="text-[10px] text-slate-500 font-medium">Click to see on map</p>
+                                </div>
+                              </div>
+                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-100 text-slate-400 group-hover:bg-pink-500 group-hover:text-white group-hover:border-pink-500 transition-all flex-shrink-0">
+                                <Navigation className="w-3.5 h-3.5" />
+                              </div>
+                            </button>
+                          ))}
+                      </div>
                     </div>
                   )}
 
@@ -245,7 +204,7 @@ export default function TravelSidebar() {
           >
             <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
               <Loader2 className="w-4 h-4 text-pink-500 animate-spin" />
-              <span className="text-xs text-slate-500 font-medium">Luna is searching for the best spots...</span>
+              <span className="text-xs text-slate-500 font-medium">Aura is searching for the best spots...</span>
             </div>
           </motion.div>
         )}
@@ -285,7 +244,7 @@ export default function TravelSidebar() {
           </div>
         </form>
         <p className="text-[10px] text-center text-slate-400 mt-3 font-medium">
-          Luna can help you find restaurants, landmarks, and more.
+          Aura can help you find restaurants, landmarks, and more.
         </p>
       </div>
     </div>

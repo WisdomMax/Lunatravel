@@ -27,7 +27,7 @@ const TravelContext = createContext<TravelContextType | undefined>(undefined);
 
 export function TravelProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<TravelState>(() => {
-    const saved = localStorage.getItem('luna_travel_state');
+    const saved = localStorage.getItem('aura_travel_state');
     const initialState = {
       currentLocation: INITIAL_LOCATION,
       history: [],
@@ -57,7 +57,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
   // PERSISTENCE: Save state to localStorage whenever history, location or memory changes
   useEffect(() => {
     const { history, currentLocation, memory, nearbyPlaces } = state;
-    localStorage.setItem('luna_travel_state', JSON.stringify({
+    localStorage.setItem('aura_travel_state', JSON.stringify({
       history: history.slice(-20), // Only save recent history to avoid storage limits
       currentLocation,
       memory,
@@ -196,14 +196,6 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     }
   }, [state.history, state.currentLocation, playAudio, isLiveMode, liveService]);
 
-  const syncLocationContext = useCallback((location: Location, name?: string) => {
-    if (isLiveMode && liveService) {
-      const locationText = `📍현재 지도 위치: ${name || location.name || '알 수 없는 장소'} (좌표: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
-      liveService.sendText(locationText);
-      console.log('[LunaLive] Location synced to model:', name || location.name);
-    }
-  }, [isLiveMode, liveService]);
-
   const moveTo = useCallback((location: Location, name?: string, goStreetView = false) => {
     setState(prev => {
       // If we are already there and in streetview, don't jitter
@@ -231,15 +223,10 @@ export function TravelProvider({ children }: { children: ReactNode }) {
             ...prev,
             currentLocation: { ...prev.currentLocation, name: geocodedName }
           }));
-          // Sync geocoded name to model
-          syncLocationContext(location, geocodedName);
         }
       });
-    } else {
-      // Sync explicitly provided name
-      syncLocationContext(location, name);
     }
-  }, [syncLocationContext]);
+  }, []);
 
   const stopLiveMode = useCallback(() => {
     liveService?.disconnect();
@@ -247,236 +234,241 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     setIsLiveMode(false);
     setLiveService(null);
     setState(prev => ({ ...prev, isThinking: false, isSpeaking: false }));
-    console.log('[LunaLive] Voice Talk stopped and state reset.');
+    console.log('[AuraLive] Voice Talk stopped and state reset.');
   }, [liveService, streamer]);
 
   const resetSession = useCallback(() => {
-    if (window.confirm('대화 내역과 주변 장소들을 초기화하고 경복궁에서 새로 시작할까요?')) {
+    if (window.confirm('대화 내역과 추천 장소들을 모두 초기화할까요? (메모리는 유지됩니다)')) {
       setState(prev => ({
         ...prev,
         history: [],
-        nearbyPlaces: [],
-        currentLocation: INITIAL_LOCATION,
-        viewMode: 'map'
+        nearbyPlaces: []
       }));
-      localStorage.removeItem('luna_travel_state');
-      window.location.reload(); // 확실한 위치 초기화를 위해 페이지 새로고침
-      console.log('[Luna] Session Reset & Reloaded.');
+      localStorage.removeItem('aura_travel_state');
+      console.log('[Aura] Session Reset.');
     }
   }, []);
 
   const startLiveMode = useCallback(async () => {
     try {
-      console.log('[LunaLive] Starting Live Mode...');
-      setIsLiveMode(true);
+      console.log('[AuraLive] Requesting microphone permission...');
+      // 1. Give immediate feedback
+      setIsLiveMode(true); // Turn green immediately to show it's trying
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
-      });
-
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API Key missing");
-
-      await streamer.resumeContext();
-
-      let service: GeminiLiveService | null = null;
-
-      // [핵심 변경: 마이크 실시간 캡처 및 전송 루프 연결]
-      streamer.startRecording((base64Data) => {
-        // liveService가 생성되면 이를 참조해서 오디오 데이터를 전송
-        if (service) {
-          service.sendAudio(base64Data);
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
         }
       });
 
-      const locationContext = `[MANDATORY CURRENT LOCATION]: ${state.currentLocation.name || 'London'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
-      const liveSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n${locationContext}`;
+      // Stop the temp stream immediately, streamer will open its own
+      stream.getTracks().forEach(track => track.stop());
+      console.log('[AuraLive] Microphone permission granted.');
 
-      service = new GeminiLiveService(
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        alert("Gemini API Key is missing");
+        setIsLiveMode(false);
+        return;
+      }
+
+      await streamer.resumeContext();
+
+      const locationContext = `[MANDATORY CURRENT LOCATION]: ${state.currentLocation.name || 'London'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}). 
+YOU ARE CURRENTLY IN THIS CITY. SEARCH RESULTS AND SUGGESTIONS MUST BE WITHIN THIS CITY ONLY. DO NOT SUGGEST PLACES IN KOREA OR OTHER COUNTRIES UNLESS EXPLICITLY ASKED.`;
+
+      const liveSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n${locationContext}\n(IMPORTANT: Use the location information provided above as your primary anchor for all tools and search.)`;
+
+      const service = new GeminiLiveService(
         apiKey,
         (msg) => {
           if (msg.error) {
-            console.error("Live Error:", msg.error);
+            console.error("Live Service Error:", msg.error);
+            alert(`Voice Talk Error: ${msg.error}`);
             stopLiveMode();
             return;
           }
-
-          // [핵심 변경] 서버 측에서 사용자가 말을 끊었음(Interrupted)을 알려주거나, 프론트에서 끊김 신호 수신 시 큐 초기화
-          if (msg.interrupted || (msg.serverContent && msg.serverContent.interrupted)) {
-            console.log('[LunaLive] Interrupted by user! Clearing audio queue.');
-            streamer.clearPlayback();
-            setState(prev => ({ ...prev, isSpeaking: false }));
-          }
-
-          if (msg.text || msg.toolCall) {
-            setState(prev => {
-              let newState = { ...prev, isThinking: false };
-
-              // 1. Handle Tool Calls
-              if (msg.toolCall && msg.toolCall.name === 'show_place_on_map') {
-                const { name, address, category } = msg.toolCall.args;
-
-                // Avoid duplication
-                const existingPlace = prev.nearbyPlaces.find(p => p.name === name);
-                const placeId = existingPlace?.id || `tool-${Date.now()}`;
-
-                if (!existingPlace) {
-                  const newPlace: Place = {
-                    id: placeId,
-                    name,
-                    location: { ...prev.currentLocation, address: address || '' },
-                    type: category || (name.toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction')
-                  };
-                  newState.nearbyPlaces = [...prev.nearbyPlaces, newPlace];
-                }
-
-                // Add or update model message if not already praising the place in recent messages
-                const history = [...newState.history];
-                history.push({
-                  id: `tool-msg-${Date.now()}`,
-                  role: 'model',
-                  text: `📍 오빠! 루나가 찾은 [[PLACE: ${name}]] 여기 어때? 지도로 바로 보여줄게!`,
-                  timestamp: Date.now()
-                });
-                newState.history = history;
-
-                if (typeof google !== 'undefined' && google.maps?.Geocoder) {
-                  const geocoder = new google.maps.Geocoder();
-                  // More robust search: combine name and address if available
-                  const searchQuery = address ? `${name}, ${address}` : name;
-
-                  geocoder.geocode({
-                    address: searchQuery,
-                    location: prev.currentLocation,
-                    region: 'KR' // Priority for Korea
-                  }, (results, status) => {
-                    if (status === 'OK' && results?.[0]) {
-                      const loc = results[0].geometry.location;
-                      const newLoc = {
-                        lat: loc.lat(),
-                        lng: loc.lng(),
-                        name: name, // Preserve the original name
-                        address: results[0].formatted_address
-                      };
-
-                      setState(inner => ({
-                        ...inner,
-                        nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { ...p, location: newLoc } : p)
-                      }));
-                      moveTo(newLoc, name, false); // 데이터 부재 시 먹통(Blank Screen) 이슈를 방지하기 위해 일반 지도 모드 유지
-                    }
-                  });
-                }
-              }
-
-              // 2. Handle Text Chunks (Live Transcript)
-              if (msg.text) {
-                // Determine a unique ID for this specific response turn to avoid duplication
-                // If it's the model speaking, we use a session-based approach or timing
-                const liveId = `live-turn-${newState.history.filter(m => m.id.startsWith('live-turn')).length}`;
-                const history = [...prev.history];
-
-                // If the last message is a live-turn and role is model, append to it
-                const lastMsg = history[history.length - 1];
-                if (lastMsg && lastMsg.role === 'model' && lastMsg.id.startsWith('live-turn')) {
-                  history[history.length - 1] = { ...lastMsg, text: lastMsg.text + msg.text };
-                } else {
-                  history.push({ id: `live-turn-${Date.now()}`, role: 'model', text: msg.text, timestamp: Date.now() });
-                }
-
-                newState.history = history;
-                // Note: isSpeaking is handled by msg.audioData or msg.isEnd
-              }
-
-              return newState;
-            });
-          }
-
           if (msg.audioData) {
-            // console.log('[LunaLive] Receiving audio chunk, length:', msg.audioData.length);
-            streamer.playAudioChunk(msg.audioData).catch(e => console.error("Play error:", e));
+            streamer.playAudioChunk(msg.audioData);
             setState(prev => ({ ...prev, isSpeaking: true }));
           }
+          if (msg.text) {
+            setState(prev => {
+              const lastMsg = prev.history[prev.history.length - 1];
+              // If last message was a live model message, append to it
+              if (lastMsg && lastMsg.role === 'model' && lastMsg.id.startsWith('live-')) {
+                const updatedHistory = [...prev.history];
+                updatedHistory[updatedHistory.length - 1] = {
+                  ...lastMsg,
+                  text: lastMsg.text + msg.text
+                };
+                return { ...prev, history: updatedHistory, isThinking: false };
+              }
 
-          if (msg.isEnd) {
-            setState(prev => ({ ...prev, isSpeaking: false }));
+              // Otherwise, create a new live message
+              const aiMessage: Message = {
+                id: `live-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                role: 'model',
+                text: msg.text,
+                timestamp: Date.now()
+              };
+              return {
+                ...prev,
+                history: [...prev.history, aiMessage],
+                isThinking: false
+              };
+            });
           }
-
           if (msg.groundingMetadata) {
+            console.log('[AuraLive] Grounding Data Received:', msg.groundingMetadata);
             const groundingChunks = msg.groundingMetadata.groundingChunks || [];
+
             for (const chunk of groundingChunks) {
               if (chunk.maps && chunk.maps.title) {
                 const placeName = chunk.maps.title;
-                const placeId = `live-ground-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+                const placeId = `live-place-${Math.random().toString(36).substr(2, 5)}`;
 
                 const newPlace: Place = {
                   id: placeId,
                   name: placeName,
                   location: state.currentLocation,
-                  type: placeName.toLowerCase().match(/restaurant|cafe|bar|pub|bistro/) ? 'restaurant' : 'attraction',
+                  type: placeName.toLowerCase().includes('rest') || placeName.toLowerCase().includes('cafe') ? 'restaurant' : 'attraction',
                   url: chunk.maps.uri
                 };
 
-                // Existing maps grounding logic
+                // Immediate partial update to show "thinking/loading" or the name at least
                 setState(prev => ({
                   ...prev,
-                  nearbyPlaces: [...prev.nearbyPlaces, newPlace],
-                  history: [...prev.history, {
-                    id: `ground-msg-${Date.now()}`,
-                    role: 'model',
-                    text: `🔍 루나가 찾아낸 곳: [[PLACE: ${placeName}]] (지도를 봐줘!)`,
-                    timestamp: Date.now()
-                  }]
+                  nearbyPlaces: [...prev.nearbyPlaces, newPlace]
                 }));
 
-                // Geocode grounding result
-                if (typeof google !== 'undefined' && google.maps?.Geocoder) {
+                // Geocode with LOCATION BIAS
+                if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
                   const geocoder = new google.maps.Geocoder();
-                  geocoder.geocode({ address: placeName, location: state.currentLocation }, (results, status) => {
-                    if (status === 'OK' && results?.[0]) {
+                  geocoder.geocode({
+                    address: placeName,
+                    location: state.currentLocation
+                  }, (results, status) => {
+                    if (status === 'OK' && results && results[0]) {
                       const loc = results[0].geometry.location;
-                      const newLoc = { lat: loc.lat(), lng: loc.lng(), address: results[0].formatted_address };
-                      setState(inner => ({
-                        ...inner,
-                        nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { ...p, location: newLoc } : p)
+                      const newLoc = { lat: loc.lat(), lng: loc.lng() };
+
+                      setState(prev => ({
+                        ...prev,
+                        nearbyPlaces: prev.nearbyPlaces.map(p =>
+                          p.id === placeId ? { ...p, location: newLoc } : p
+                        )
                       }));
+
+                      // Auto-pan in Live Mode too
                       moveTo(newLoc, placeName);
                     }
                   });
                 }
               }
-
-              // Handle Web Search Grounding (googleSearch tool)
-              if (chunk.web && chunk.web.title) {
-                const { title, uri } = chunk.web;
-                setState(prev => ({
-                  ...prev,
-                  history: [...prev.history, {
-                    id: `web-ground-${Date.now()}`,
-                    role: 'model',
-                    text: `🌐 루나가 검색한 정보: [${title}](${uri})\n오빠, 이거 한 번 읽어봐!`,
-                    timestamp: Date.now()
-                  }]
-                }));
-              }
             }
+          }
+          if (msg.isEnd) {
+            setState(prev => {
+              // --- 🟢 LIVE PLACE EXTRACTOR ---
+              const lastLiveMsg = [...prev.history].reverse().find(m => m.role === 'model' && m.id.startsWith('live-'));
+              if (lastLiveMsg && lastLiveMsg.text) {
+                const text = lastLiveMsg.text;
+
+                // PRIORITY 1: Structured [[PLACE: Name]] tags from system prompt instruction
+                const tagPattern = /\[\[PLACE:\s*([^\]]+)\]\]/g;
+                const extracted = new Set<string>();
+                let tagMatch: RegExpExecArray | null;
+                while ((tagMatch = tagPattern.exec(text)) !== null) {
+                  const name = tagMatch[1].trim();
+                  if (name.length > 2) extracted.add(name);
+                }
+
+                // PRIORITY 2: Regex fallback if no tags found
+                if (extracted.size === 0) {
+                  const patterns = [
+                    /[""]([^""]{3,50})[""]/g,
+                    /(?:visit|try|check out|head to|go to)\s+([A-Z][^\n,.!?]{3,40})/g,
+                    /^\s*[-•]\s+([A-Z][^\n:]{4,50}?)(?:\s*[-–]|$)/gm,
+                  ];
+                  for (const re of patterns) {
+                    const copy = new RegExp(re.source, re.flags);
+                    let m: RegExpExecArray | null;
+                    while ((m = copy.exec(text)) !== null) {
+                      const name = m[1].trim();
+                      if (name.length > 3 && name.length < 50) extracted.add(name);
+                    }
+                  }
+                }
+
+                if (extracted.size > 0) {
+                  const currentLoc = prev.currentLocation;
+                  Array.from(extracted).slice(0, 5).forEach(placeName => {
+                    const placeId = `live-txt-${Math.random().toString(36).substr(2, 6)}`;
+                    setState(inner => ({
+                      ...inner,
+                      nearbyPlaces: [...inner.nearbyPlaces, {
+                        id: placeId,
+                        name: placeName,
+                        location: currentLoc,
+                        type: placeName.toLowerCase().match(/restaurant|cafe|bar|pub|bistro|diner|brasserie/)
+                          ? 'restaurant' : 'attraction',
+                      }]
+                    }));
+
+                    if (typeof google !== 'undefined' && google.maps?.Geocoder) {
+                      const geocoder = new google.maps.Geocoder();
+                      geocoder.geocode({ address: `${placeName}`, location: currentLoc }, (results, status) => {
+                        if (status === 'OK' && results?.[0]) {
+                          const loc = results[0].geometry.location;
+                          const newLoc = { lat: loc.lat(), lng: loc.lng() };
+                          const dist = Math.abs(newLoc.lat - currentLoc.lat) + Math.abs(newLoc.lng - currentLoc.lng);
+                          if (dist < 2.0) {
+                            setState(inner => ({
+                              ...inner,
+                              nearbyPlaces: inner.nearbyPlaces.map(p =>
+                                p.id === placeId ? { ...p, location: newLoc } : p
+                              )
+                            }));
+                          }
+                        }
+                      });
+                    }
+                  });
+                }
+              }
+              return { ...prev, isSpeaking: false };
+            });
           }
         },
         async () => {
-          console.log("Live Connected");
+          console.log("Live Mode Connected & Ready");
           setIsLiveMode(true);
-          const locationSnippet = `[Current Location]: ${state.currentLocation.name || 'Current Position'}`;
+
+          // SYNC MEMORY + LOCATION: Send history, memory, AND current position
+          const locationSnippet = state.currentLocation.name
+            ? `[Current Location]: ${state.currentLocation.name} (${state.currentLocation.lat.toFixed(5)}, ${state.currentLocation.lng.toFixed(5)})`
+            : `[Current Location]: (${state.currentLocation.lat.toFixed(5)}, ${state.currentLocation.lng.toFixed(5)})`;
           service.sendInitialHistory([{ role: 'user', text: locationSnippet }, ...state.history], state.memory);
-          await streamer.startRecording((base64) => service.sendAudio(base64));
+
+          try {
+            await streamer.startRecording((base64) => {
+              service.sendAudio(base64);
+            });
+          } catch (e) {
+            console.error("Failed to start recording:", e);
+            alert("Could not start microphone recording. Please check your settings.");
+            service.disconnect();
+            setIsLiveMode(false);
+          }
         },
         () => {
+          console.log("Live Mode Session Closed");
           setIsLiveMode(false);
           streamer.stopRecording();
           setLiveService(null);
-        },
-        () => {
-          streamer.clearPlayback();
-          setState(prev => ({ ...prev, isSpeaking: false }));
         },
         liveSystemInstruction
       );
@@ -484,10 +476,15 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       service.connect();
       setLiveService(service);
     } catch (err: any) {
-      console.error("Live start error:", err);
+      console.error("Microphone access denied or error:", err);
       setIsLiveMode(false);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert("마이크 사용 권한이 거부되었습니다. 🎙️🚫");
+      } else {
+        alert(`보이스 톡 시작 오류: ${err.message}`);
+      }
     }
-  }, [state.currentLocation, state.history, state.memory, streamer, stopLiveMode, moveTo]);
+  }, [streamer, stopLiveMode, state.currentLocation, state.history, state.memory]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -499,8 +496,16 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
   return (
     <TravelContext.Provider value={{
-      state, sendMessage, moveTo, setViewMode, playAudio,
-      stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession
+      state,
+      sendMessage,
+      moveTo,
+      setViewMode,
+      playAudio,
+      stopAudio,
+      isLiveMode,
+      startLiveMode,
+      stopLiveMode,
+      resetSession
     }}>
       {children}
     </TravelContext.Provider>
@@ -509,6 +514,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
 export function useTravel() {
   const context = useContext(TravelContext);
-  if (context === undefined) throw new Error('useTravel must be used within a TravelProvider');
+  if (context === undefined) {
+    throw new Error('useTravel must be used within a TravelProvider');
+  }
   return context;
 }
