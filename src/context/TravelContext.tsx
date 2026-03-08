@@ -74,8 +74,16 @@ export function TravelProvider({ children }: { children: ReactNode }) {
   const stopAudio = useCallback(() => {
     audioElement.pause();
     audioElement.currentTime = 0;
+
+    // Live Mode Explicit Interrupt
+    if (isLiveMode && liveService) {
+      liveService.sendInterrupt();
+    }
+    streamer.clearPlayback();
+    streamer.unmuteRecording(); // 정지 후 마이크 재개(다음 발화 대기)
+
     setState(prev => ({ ...prev, isSpeaking: false }));
-  }, [audioElement]);
+  }, [audioElement, isLiveMode, liveService, streamer]);
 
   const playAudio = useCallback((base64: string) => {
     stopAudio();
@@ -281,14 +289,6 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
       let service: GeminiLiveService | null = null;
 
-      // [핵심 변경: 마이크 실시간 캡처 및 전송 루프 연결]
-      streamer.startRecording((base64Data) => {
-        // liveService가 생성되면 이를 참조해서 오디오 데이터를 전송
-        if (service) {
-          service.sendAudio(base64Data);
-        }
-      });
-
       const locationContext = `[MANDATORY CURRENT LOCATION]: ${state.currentLocation.name || 'London'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
       const liveSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n${locationContext}`;
 
@@ -335,7 +335,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
                 history.push({
                   id: `tool-msg-${Date.now()}`,
                   role: 'model',
-                  text: `📍 오빠! 루나가 찾은 [[PLACE: ${name}]] 여기 어때? 지도로 바로 보여줄게!`,
+                  text: `📍 오빠! [[PLACE: ${name}]] 여기로 가볼까? 대화창의 링크를 눌러봐!`,
                   timestamp: Date.now()
                 });
                 newState.history = history;
@@ -363,7 +363,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
                         ...inner,
                         nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { ...p, location: newLoc } : p)
                       }));
-                      moveTo(newLoc, name, false); // 데이터 부재 시 먹통(Blank Screen) 이슈를 방지하기 위해 일반 지도 모드 유지
+                      // moveTo(newLoc, name, false); // 데이터 부재 시 먹통(Blank Screen) 이슈를 방지하고 텍스트 창의 버튼 클릭 시에만 이동하도록 강제 이동(moveTo) 호출 제거
                     }
                   });
                 }
@@ -393,12 +393,16 @@ export function TravelProvider({ children }: { children: ReactNode }) {
           }
 
           if (msg.audioData) {
+            // AI 오디오 재생 시작 → 마이크 뮤트(에코 루프백 차단)
             // console.log('[LunaLive] Receiving audio chunk, length:', msg.audioData.length);
+            streamer.muteRecording();
             streamer.playAudioChunk(msg.audioData).catch(e => console.error("Play error:", e));
             setState(prev => ({ ...prev, isSpeaking: true }));
           }
 
           if (msg.isEnd) {
+            // AI 대화 완전히 끝남 → 마이크 언뮤트(사용자 입력 대기)
+            streamer.unmuteRecording();
             setState(prev => ({ ...prev, isSpeaking: false }));
           }
 
@@ -440,7 +444,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
                         ...inner,
                         nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { ...p, location: newLoc } : p)
                       }));
-                      moveTo(newLoc, placeName);
+                      // moveTo(newLoc, placeName); // Grounding 시에도 강제 이동 제거. 텍스트 대화창의 링크 클릭으로만 이동.
                     }
                   });
                 }

@@ -13,8 +13,22 @@ export class AudioStreamer {
     private nextStartTime = 0;
     private activeSources: AudioBufferSourceNode[] = [];
     private playbackTimeout: number | undefined;
+    private isMuted = false; // AI 재생 중 마이크 전송 차단 플래그
 
     constructor() { }
+
+    /** AI가 말하는 동안 마이크 스트림을 서버에 보내지 않도록 음소거 */
+    public muteRecording() {
+        this.isMuted = true;
+        console.log('[AudioStreamer] Mic muted (AI is speaking)');
+    }
+
+    /** AI가 말을 멈추거나 인터럽트 시 마이크 재활성화 */
+    public unmuteRecording() {
+        this.isMuted = false;
+        console.log('[AudioStreamer] Mic unmuted (Ready for user input)');
+    }
+
 
     public async resumeContext() {
         if (!this.audioContext) {
@@ -59,6 +73,7 @@ export class AudioStreamer {
             dummyNode.connect(this.audioContext!.destination);
 
             this.processor.onaudioprocess = (e) => {
+                if (this.isMuted) return; // AI 재생 중 전송 차단
                 const inputData = e.inputBuffer.getChannelData(0);
                 const pcm16 = this.downsampleAndConvertToPCM16(inputData, this.audioContext!.sampleRate, 16000);
                 const base64 = this.base64Encode(pcm16);

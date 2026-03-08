@@ -116,7 +116,8 @@ export class GeminiLiveService {
                                
                                [도구 사용 원칙]
                                - 실시간 정보가 필요할 경우 반드시 google_search를 사용하여 오빠에게 정확한 정보를 알려주세요.
-                               - 지도에 특정 장소를 보여줘야 할 때는 show_place_on_map 도구를 사용하세요.
+                               - 오빠가 특정 장소(도시, 거리, 맛집 등)로 가자고 제안하거나, 루나가 장소를 추천할 때는 지도를 강제로 이동시키지 말고 항상 show_place_on_map 도구를 사용해 주세요. 
+                               - 이 도구를 쓰면 채팅창에 예쁜 클릭 버튼이 생겨서 오빠가 원할 때 직접 이동할 수 있어요! (대화 중에 마크다운 링크 문법이나 괄호를 텍스트로 읽지 말아주세요)
                                
                                자, 이제 오빠랑 어디로 여행을 떠나볼까요?`
                     }]
@@ -127,12 +128,12 @@ export class GeminiLiveService {
                         functionDeclarations: [
                             {
                                 name: "show_place_on_map",
-                                description: "지도에 특정 장소를 표시하거나 검색합니다.",
+                                description: "채팅창에 특정 장소로 이동할 수 있는 클릭 가능한 링크 버튼을 생성합니다. 직접 지도를 이동시키지 않습니다.",
                                 parameters: {
                                     type: "object",
                                     properties: {
-                                        name: { type: "string", description: "장소의 이름 (예: '도쿄 타워', '제주도 맛집')" },
-                                        address: { type: "string", description: "주소 또는 도시/국가 (예: 'Tokyo, Japan', 'South Korea')" },
+                                        name: { type: "string", description: "장소 또는 지역의 이름 (예: '부산', '도쿄 타워', '제주도 맛집')" },
+                                        address: { type: "string", description: "주소 또는 도시/국가 (예: 'Busan, South Korea', 'Tokyo, Japan', 'South Korea')" },
                                         category: { type: "string", description: "장소의 종류. 'restaurant', 'attraction', 'other' 중 하나만 입력" }
                                     },
                                     required: ["name"]
@@ -237,6 +238,22 @@ export class GeminiLiveService {
                 this.onMessage({ groundingMetadata: grounding });
             }
         }
+
+        // ✅ Root-level toolCall (실제 Gemini 서버에서 오는 형식!)
+        // 로그 예시: { "toolCall": { "functionCalls": [{ "name": ..., "args": ..., "id": ... }] } }
+        if (message.toolCall && message.toolCall.functionCalls) {
+            console.log('[LunaLive] Root-level toolCall received:', message.toolCall.functionCalls);
+            for (const call of message.toolCall.functionCalls) {
+                this.onMessage({
+                    toolCall: {
+                        name: call.name,
+                        args: call.args,
+                        callId: call.id || `call-${Date.now()}`
+                    }
+                });
+                this.sendToolResponse(call.id, { success: true, placeName: call.args?.name });
+            }
+        }
     }
 
     public sendInitialHistory(history: any[], memory: Record<string, string> = {}) {
@@ -294,6 +311,17 @@ export class GeminiLiveService {
                         parts: [{ text }]
                     }
                 ],
+                turnComplete: true
+            }
+        };
+        this.sendJson(message);
+    }
+
+    public sendInterrupt() {
+        if (this.ws?.readyState !== WebSocket.OPEN) return;
+        // 클라이언트에서 턴을 강제로 완료(turnComplete: true)하여 진행중인 모델 생성을 중단합니다.
+        const message = {
+            clientContent: {
                 turnComplete: true
             }
         };
