@@ -12,6 +12,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.retro-theme {
+  font-family: var(--font-dos);
+}
+
 #root {
   width: 100%;
   height: 100%;

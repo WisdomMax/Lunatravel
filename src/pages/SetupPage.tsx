@@ -1,54 +1,59 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Camera, Upload, CheckCircle, User, Sparkles, ArrowRight, Plus } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion'; // Changed from 'motion/react' to 'framer-motion' for AnimatePresence and motion.div
+import { Camera, Upload, CheckCircle, User, Sparkles, Plus, Heart, Brain, Zap, UserPlus, Dog, Wand2, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LUNA_PERSONAS } from '../constants';
+import { RetroSound } from '../utils/retroSound';
 
-// 루나 기본 이미지 3종 + 페르소나 매핑
 const LUNA_PRESETS = [
     {
         id: 'luna-1',
         src: '/assets/luna/luna-1.webp',
-        label: '루나 C',
-        subLabel: '츤데레 가이드',
-        description: '겉으론 까칠해도 속은 누구보다 따뜻해요. "흥, 나니까 알려주는 거야!"라며 툴툴대지만 모르는 게 없는 똑순이랍니다.',
-        stats: { love: 40, knowledge: 95, energy: 60 },
-        color: 'text-amber-400',
+        label: 'Luna A',
+        subLabel: 'The Soulful Photographer',
+        description: 'A creative soul who finds beauty in the smallest details of the world.',
+        stats: { love: 85, knowledge: 70, energy: 60 },
+        tags: ['Creative', 'Soulful', 'Artistic'],
         persona: LUNA_PERSONAS['luna-1']
     },
     {
         id: 'luna-2',
         src: '/assets/luna/luna-2.webp',
-        label: '루나 B',
-        subLabel: '매혹적인 조력자',
-        description: '지적이고 차분한 매력 뒤에 묘한 설렘을 숨기고 있어요. 오빠와의 은밀한 썸을 즐기는 성숙한 여행 동반자예요.',
-        stats: { love: 75, knowledge: 85, energy: 50 },
-        color: 'text-rose-400',
+        label: 'Luna B',
+        subLabel: 'The Energetic Explorer',
+        description: 'Vibrant and bold, she seeks the thrill of new horizons and local flavors.',
+        stats: { love: 65, knowledge: 50, energy: 95 },
+        tags: ['Active', 'Bold', 'Bright'],
         persona: LUNA_PERSONAS['luna-2']
     },
     {
         id: 'luna-3',
-        src: '/assets/luna/luna-3.webp',
-        label: '루나 A',
-        subLabel: '해피 바이러스',
-        description: '오빠를 너무너무 좋아하는 귀염둥이 여동생! "오빠랑 있으면 어디든 좋아!"라며 무조건적인 호감을 표현해줄 거예요.',
-        stats: { love: 99, knowledge: 40, energy: 95 },
-        color: 'text-sky-400',
+        src: '/assets/luna/luna-1.webp',
+        label: 'Luna C',
+        subLabel: 'The Grand Voyager',
+        description: 'Wise and sophisticated, she values the deep history and stories of every place.',
+        stats: { love: 75, knowledge: 95, energy: 40 },
+        tags: ['Classy', 'Wise', 'Calm'],
         persona: LUNA_PERSONAS['luna-3']
     },
 ];
 
-const StatBar = ({ label, value, colorClass }: { label: string, value: number, colorClass: string }) => (
-    <div className="flex items-center gap-3 mb-2">
-        <span className="text-[10px] font-bold text-slate-400 w-12 tracking-tighter uppercase">{label}</span>
-        <div className="flex-1 h-1.5 bg-slate-700/50 rounded-full overflow-hidden border border-white/5">
+const StatBar = ({ label, value, colorClass, barColorClass, icon: Icon }: { label: string, value: number, colorClass: string, barColorClass: string, icon: any }) => (
+    <div className="flex flex-col gap-1 w-full">
+        <div className="flex justify-between items-center text-[10px] xl:text-xs font-mulmaru uppercase tracking-wider">
+            <div className="flex items-center gap-1.5 font-bold">
+                <Icon size={12} className={colorClass} />
+                <span className="translate-y-0.5">{label}</span>
+            </div>
+            <span className={`${colorClass} font-bold`}>{value}%</span>
+        </div>
+        <div className="h-2 xl:h-3 w-full bg-white/10 p-[2px] rounded-none relative overflow-hidden border border-white/5 shadow-inner">
             <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${value}%` }}
-                transition={{ duration: 1, ease: "easeOut" }}
-                className={`h-full ${colorClass} shadow-[0_0_8px_rgba(255,255,255,0.3)]`}
+                transition={{ duration: 1, ease: "circOut" }}
+                className={`h-full ${barColorClass} rounded-none shadow-[0_0_12px_rgba(255,255,255,0.4)]`}
             />
         </div>
-        <span className="text-[10px] font-mono text-slate-500 w-6 text-right">{value}</span>
     </div>
 );
 
@@ -57,336 +62,310 @@ interface SetupPageProps {
 }
 
 export default function SetupPage({ onComplete }: SetupPageProps) {
-    const [userPhoto, setUserPhoto] = useState<string>(() =>
-        localStorage.getItem('user_photo') || ''
-    );
-
-    const [lunaSelection, setLunaSelection] = useState<string>(() =>
-        localStorage.getItem('luna_selection') || 'luna-1'
-    );
-    const [lunaCustomPhoto, setLunaCustomPhoto] = useState<string>(() =>
-        localStorage.getItem('luna_custom_photo') || ''
-    );
+    const [userPhoto, setUserPhoto] = useState<string>(() => localStorage.getItem('user_photo') || '');
+    const [userName, setUserName] = useState<string>(() => localStorage.getItem('user_name') || '');
+    const [lunaSelection, setLunaSelection] = useState<string>(() => localStorage.getItem('luna_selection') || 'luna-2');
+    const [isStarting, setIsStarting] = useState(false);
+    const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+    const [loadingDots, setLoadingDots] = useState('');
+    const [hoveredLuna, setHoveredLuna] = useState<string | null>(null);
+    const [lunaCustomPhoto, setLunaCustomPhoto] = useState<string>(() => localStorage.getItem('luna_custom_photo') || '');
+    const [customPartnerName, setCustomPartnerName] = useState(() => localStorage.getItem('custom_partner_name') || '');
+    const [customPartnerSummary, setCustomPartnerSummary] = useState(() => localStorage.getItem('custom_partner_summary') || '');
+    const [customType, setCustomType] = useState('female');
+    const [isRefining, setIsRefining] = useState(false);
 
     const userPhotoInputRef = useRef<HTMLInputElement>(null);
     const lunaCustomInputRef = useRef<HTMLInputElement>(null);
 
-    const selectedLuna = LUNA_PRESETS.find(p => p.id === lunaSelection);
-
-    const handleUserPhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleUserPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setUserPhoto(base64);
-            localStorage.setItem('user_photo', base64);
-        };
-        reader.readAsDataURL(file);
-    }, []);
-
-    const handleLunaCustomUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setLunaCustomPhoto(base64);
-            setLunaSelection('custom');
-            localStorage.setItem('luna_custom_photo', base64);
-            localStorage.setItem('luna_selection', 'custom');
-            // 커스텀은 기본 페르소나 사용
-            localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-3']); // 적극적인 성격 기본값
-        };
-        reader.readAsDataURL(file);
-    }, []);
-
-    const handleSelectPreset = useCallback((presetId: string) => {
-        setLunaSelection(presetId);
-        localStorage.setItem('luna_selection', presetId);
-        const preset = LUNA_PRESETS.find(p => p.id === presetId);
-        if (preset) {
-            localStorage.setItem('luna_photo', preset.src);
-            localStorage.setItem('luna_persona', preset.persona);
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result as string;
+                setUserPhoto(base64String);
+                localStorage.setItem('user_photo', base64String);
+                RetroSound.playSuccess();
+            };
+            reader.readAsDataURL(file);
         }
-    }, []);
+    };
 
-    const handleStart = useCallback(() => {
-        if (!userPhoto) return;
-        if (lunaSelection === 'custom' && lunaCustomPhoto) {
+    const handleLunaCustomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result as string;
+                setLunaCustomPhoto(base64String);
+                setLunaSelection('custom');
+                localStorage.setItem('luna_custom_photo', base64String);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleSelectPreset = (id: string) => {
+        setLunaSelection(id);
+        RetroSound.playClick();
+    };
+
+    const handleRefinePersona = async () => {
+        if (!customPartnerSummary.trim()) return;
+        setIsRefining(true);
+        try {
+            const response = await fetch('/api/refine-persona', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: customPartnerSummary, type: customType })
+            });
+            const data = await response.json();
+            if (data.persona) {
+                localStorage.setItem('custom_partner_persona', data.persona);
+                localStorage.setItem('custom_partner_summary', customPartnerSummary);
+                RetroSound.playSuccess();
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsRefining(false);
+        }
+    };
+
+    const handleStart = () => {
+        if (!userPhoto || !userName.trim() || isStarting) return;
+        setIsStarting(true);
+        setShowLoadingOverlay(true);
+        RetroSound.playBoot();
+
+        let dots = '';
+        const dotsInterval = setInterval(() => {
+            dots = dots.length >= 3 ? '' : dots + '.';
+            setLoadingDots(dots);
+        }, 150);
+
+        localStorage.setItem('user_name', userName);
+        if (lunaSelection === 'custom') {
+            localStorage.setItem('luna_name', customPartnerName);
+            localStorage.setItem('custom_partner_name', customPartnerName);
             localStorage.setItem('luna_photo', lunaCustomPhoto);
-            if (!localStorage.getItem('luna_persona')) {
-                localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-3']);
-            }
-        } else {
-            const preset = LUNA_PRESETS.find(p => p.id === lunaSelection);
-            if (preset) {
-                localStorage.setItem('luna_photo', preset.src);
-                localStorage.setItem('luna_persona', preset.persona);
-            }
+            const finalPersona = localStorage.getItem('custom_partner_persona');
+            if (finalPersona) localStorage.setItem('luna_persona', finalPersona);
         }
-        onComplete();
-    }, [userPhoto, lunaSelection, lunaCustomPhoto, onComplete]);
+
+        setTimeout(() => {
+            clearInterval(dotsInterval);
+            onComplete();
+        }, 1200);
+    };
 
     return (
-        <div className="min-h-screen w-screen bg-[#0d091a] flex items-center justify-center p-4 sm:p-8 xl:p-12 relative overflow-hidden font-sans select-none text-white">
-            {/* 미연시 감성 배경 연출: 격자무늬 + 은은한 파스텔 글로우 */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute inset-0 opacity-10" style={{
-                    backgroundImage: `linear-gradient(#2a1b4d 1px, transparent 1px), linear-gradient(90deg, #2a1b4d 1px, transparent 1px)`,
-                    backgroundSize: '32px 32px'
-                }} />
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-[#1a0b33]/40 to-[#0d091a]" />
+        <div className="retro-theme relative h-screen w-screen overflow-hidden bg-black text-white font-dos select-none">
+            {/* Cinematic Pixel Background local */}
+            <div
+                className="absolute inset-0 bg-cover bg-center opacity-70 image-rendering-pixelated"
+                style={{ backgroundImage: 'url("/assets/pixel_bg.png")' }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/95 pointer-events-none" />
 
-                {/* 파스텔톤 글로우 레이어 (더 화사하게) */}
-                <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-pink-500/10 rounded-full blur-[120px] animate-pulse" />
-                <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-            </div>
+            {/* CRT Scanlines Layer local */}
+            <div className="absolute inset-0 pointer-events-none z-50 opacity-[0.06] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,4px_100%]" />
 
-            <div className="relative z-10 w-full max-w-[1440px] flex flex-col items-center">
-
-                {/* 상단 타이틀 섹션 (미연시풍 폰트 연출 느낌) */}
-                <div className="text-center mb-10 xl:mb-16">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="inline-block px-4 py-1.5 bg-gradient-to-r from-pink-600 to-purple-600 text-[11px] font-black uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(219,39,119,0.4)]"
-                    >
-                        New Adventure Setup
-                    </motion.div>
-                    <h1 className="text-5xl xl:text-7xl font-black italic tracking-tighter text-white drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-                        LUNA <span className="text-pink-400">CONNECT</span>
-                    </h1>
-                </div>
-
-                <div className="w-full flex flex-col gap-10">
-
-                    {/* 메인 콘텐츠: 좌(캐릭터 선택) / 우(내 정보/상세) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 xl:gap-12 items-start">
-
-                        {/* 왼쪽 캐릭터 선택 패널 (미연시 카드 리스트) */}
-                        <div className="lg:col-span-8 flex flex-col">
-                            <div className="flex items-end justify-center gap-4 xl:gap-6 min-h-[420px] mb-8 pb-4">
-                                {LUNA_PRESETS.map((preset) => {
-                                    const isSelected = lunaSelection === preset.id;
-                                    return (
-                                        <motion.button
-                                            key={preset.id}
-                                            onClick={() => handleSelectPreset(preset.id)}
-                                            animate={{
-                                                y: isSelected ? -20 : 0,
-                                                scale: isSelected ? 1.05 : 0.85,
-                                                zIndex: isSelected ? 20 : 10,
-                                            }}
-                                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                                            className={`group relative w-[180px] xl:w-[240px] aspect-[1/1.5] transition-all rounded-xl overflow-hidden border-4 shadow-2xl ${isSelected ? 'border-pink-500 ring-4 ring-pink-500/20' : 'border-slate-800 opacity-60 grayscale-[50%]'}`}
-                                        >
-                                            <img src={preset.src} alt={preset.label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                                            {/* 이름 태그 */}
-                                            <div className={`absolute bottom-0 inset-x-0 p-3 bg-black/60 backdrop-blur-md border-t border-slate-700/50`}>
-                                                <p className={`text-center font-black italic text-lg xl:text-2xl ${isSelected ? 'text-pink-400' : 'text-slate-400'}`}>
-                                                    {preset.label}
-                                                </p>
-                                            </div>
-                                            {isSelected && (
-                                                <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-pink-500 flex items-center justify-center animate-bounce shadow-lg">
-                                                    <Sparkles size={16} className="text-white" />
-                                                </div>
-                                            )}
-                                        </motion.button>
-                                    );
-                                })}
-
-                                {/* 커스텀 선택 카드 */}
-                                <motion.button
-                                    onClick={() => lunaCustomInputRef.current?.click()}
-                                    animate={{
-                                        y: lunaSelection === 'custom' ? -20 : 0,
-                                        scale: lunaSelection === 'custom' ? 1.05 : 0.85,
-                                    }}
-                                    className={`relative w-[150px] xl:w-[200px] aspect-[1/1.5] transition-all rounded-xl overflow-hidden border-4 border-dashed shadow-2xl ${lunaSelection === 'custom' ? 'border-purple-400 bg-purple-900/20' : 'border-slate-800 opacity-50'}`}
-                                >
-                                    {lunaCustomPhoto ? (
-                                        <img src={lunaCustomPhoto} alt="Custom" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-3">
-                                            <Plus size={40} strokeWidth={1} />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-center italic">Create<br />Partner</span>
-                                        </div>
-                                    )}
-                                    <div className="absolute bottom-0 inset-x-0 p-3 bg-black/60 backdrop-blur-md border-t border-slate-700/50">
-                                        <p className={`text-center font-black italic text-lg xl:text-xl ${lunaSelection === 'custom' ? 'text-purple-400' : 'text-slate-500'}`}>CUSTOM</p>
-                                    </div>
-                                </motion.button>
-                            </div>
+            <div className="relative z-10 w-full h-full flex flex-col p-4 xl:p-6">
+                <header className="flex items-center justify-between mb-4 animate-fade-in shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 xl:w-10 xl:h-10 bg-rose-600 rotate-45 flex items-center justify-center border-2 border-white/20 shadow-lg">
+                            <Sparkles size={18} className="-rotate-45 text-white" />
                         </div>
+                        <h1 className="text-2xl xl:text-4xl font-mulmaru tracking-widest uppercase translate-y-1">
+                            TRAVEL THE WORLD <span className="text-white/60 font-medium font-mulmaru">WITH LUNA</span>
+                        </h1>
+                    </div>
+                </header>
 
-                        {/* 오른쪽 플레이어 프로필 (미연시 주인공 설정 느낌) */}
-                        <div className="lg:col-span-4 self-stretch">
-                            <div className="h-full bg-black/40 backdrop-blur-xl border-4 border-slate-800 rounded-2xl p-6 flex flex-col shadow-[15px_15px_0px_0px_rgba(0,0,0,0.3)]">
-                                <div className="flex items-center gap-3 mb-6 border-b border-slate-800 pb-4">
-                                    <div className="w-3 h-3 bg-pink-500 rounded-full animate-pulse" />
-                                    <h2 className="text-sm font-black italic tracking-widest uppercase text-slate-400">Sync Master Profile</h2>
-                                </div>
-
-                                <div className="flex flex-col gap-6">
-                                    <div
-                                        onClick={() => userPhotoInputRef.current?.click()}
-                                        className="relative w-full aspect-square bg-[#0a0a14] rounded-xl overflow-hidden cursor-pointer group border-2 border-slate-700 hover:border-pink-500 transition-colors shadow-inner"
-                                    >
-                                        {userPhoto ? (
-                                            <img src={userPhoto} alt="Me" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-4">
-                                                <Camera size={48} strokeWidth={0.5} className="group-hover:text-pink-500 transition-colors" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-center opacity-50 italic">Insert Player Identity</span>
-                                            </div>
-                                        )}
-                                        <div className="absolute inset-0 bg-pink-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <Upload className="text-white drop-shadow-lg" />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-lg">
-                                            <p className="text-[10px] font-black uppercase text-pink-500 mb-1">■ Current Status</p>
-                                            <p className="text-xs text-slate-400 font-medium italic">
-                                                {userPhoto ? "Ready to initialize connection." : "Identity data required for synchronization."}
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => userPhotoInputRef.current?.click()}
-                                            className={`w-full py-4 rounded-lg font-black text-xs uppercase tracking-[0.3em] transition-all shadow-[0_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1
-                                                ${userPhoto ? 'bg-pink-600 hover:bg-pink-500' : 'bg-slate-700 text-slate-400'}
-                                            `}
-                                        >
-                                            Update Identity
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                <main className="flex-1 flex flex-col items-center justify-center py-2 xl:py-4 overflow-hidden">
+                    <div className="text-center mb-6 xl:mb-10 animate-slide-up">
+                        <h2 className="text-5xl xl:text-8xl font-mulmaru mb-2 tracking-tighter drop-shadow-2xl">Destined Encounter</h2>
+                        <div className="h-2 w-48 bg-rose-600 mx-auto mb-4 shadow-[0_0_20px_rgba(225,29,72,0.6)]" />
+                        <p className="text-xs xl:text-xl font-dos text-white/70 uppercase tracking-[0.6em] drop-shadow-lg">IDENTIFY YOUR SOUL PARTNER. HOVER FOR SECRETS.</p>
                     </div>
 
-                    {/* 하단 미연시 전형적인 대화창 (하이라이트) */}
-                    <div className="relative mt-4">
-                        {/* 캐릭터 대사 말머리 (이름표) */}
-                        <div className="absolute -top-7 left-10 z-20">
+                    <div className="flex flex-wrap justify-center items-end gap-6 xl:gap-20 w-full px-6 overflow-visible h-full max-h-[60%]">
+                        {LUNA_PRESETS.map((luna) => (
                             <motion.div
-                                initial={{ x: -20, opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                key={lunaSelection}
-                                className={`px-10 py-1.5 rounded-t-xl font-black italic text-xl xl:text-2xl shadow-lg border-x-4 border-t-4 ${lunaSelection === 'custom' ? 'bg-purple-600 border-purple-400' : `${selectedLuna?.color.replace('text-', 'bg-').split(' ')[0]} border-white/20`}`}
+                                key={luna.id}
+                                onMouseEnter={() => { setHoveredLuna(luna.id); RetroSound.playHover(); }}
+                                onMouseLeave={() => setHoveredLuna(null)}
+                                whileHover={{ y: -20, scale: 1.15, zIndex: 100 }}
+                                onClick={() => handleSelectPreset(luna.id)}
+                                className={`relative w-[160px] xl:w-[260px] aspect-[4/6.2] cursor-pointer group transition-all duration-700 rounded-none overflow-hidden ${lunaSelection === luna.id ? 'ring-4 xl:ring-8 ring-rose-600 shadow-[0_0_120px_rgba(225,29,72,0.6)]' : 'ring-2 ring-white/10 hover:ring-white/40 shadow-2xl'}`}
                             >
-                                {lunaSelection === 'custom' ? '???' : selectedLuna?.label}
-                            </motion.div>
-                        </div>
-
-                        {/* 대화창 본체 */}
-                        <div className="relative bg-black/60 backdrop-blur-xl border-4 border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-1 rounded-3xl">
-                            <div className="bg-[#1a0b33]/40 border-2 border-white/5 p-8 xl:p-12 rounded-[22px] flex flex-col lg:flex-row items-center gap-10">
-
-                                {/* 캐릭터 대사 영역 */}
-                                <div className="flex-1">
-                                    <AnimatePresence mode="wait">
-                                        <motion.div
-                                            key={lunaSelection}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -10 }}
-                                            className="min-h-[100px] xl:min-h-[140px] flex flex-col justify-center"
-                                        >
-                                            <div className="text-xl xl:text-3xl font-black italic leading-snug tracking-tight text-pink-50 text-wrap max-w-[900px]">
-                                                {lunaSelection === 'custom'
-                                                    ? '"우리만의 특별한 이야기를 만들어볼까? 오빠가 골라준 내 모습, 정말 마음에 들어!"'
-                                                    : `"${selectedLuna?.description}"`}
-                                            </div>
-                                            {/* 대화창 하단 삼각형 (다음 버튼 느낌) */}
-                                            <motion.div
-                                                animate={{ y: [0, 5, 0] }}
-                                                transition={{ duration: 1.5, repeat: Infinity }}
-                                                className="self-end mt-4 text-pink-500"
-                                            >
-                                                ▶
+                                <img src={luna.src} alt={luna.label} className="w-full h-full object-cover image-rendering-pixelated group-hover:scale-110 transition-transform duration-1000" />
+                                <div className="absolute inset-x-0 bottom-0 p-3 xl:p-6 bg-gradient-to-t from-black via-black/90 to-transparent pt-24 text-left">
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div>
+                                            <h3 className="text-xl xl:text-3xl font-mulmaru mb-0.5 leading-none">{luna.label}</h3>
+                                            <p className="text-[8px] xl:text-[10px] font-dos text-rose-500 uppercase tracking-widest font-bold font-normal">{luna.subLabel}</p>
+                                        </div>
+                                        {lunaSelection === luna.id && <span className="px-3 py-1 bg-rose-600 text-[10px] font-mulmaru rounded-none shadow-lg h-fit mb-1 border border-white/20">LOCKED</span>}
+                                    </div>
+                                    <AnimatePresence>
+                                        {hoveredLuna === luna.id && (
+                                            <motion.div initial={{ opacity: 0, y: 30, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: 30, height: 0 }} className="space-y-4 xl:space-y-5 pt-3 border-t border-white/10 mt-3">
+                                                <p className="text-[9px] xl:text-sm font-dos text-white/90 leading-tight drop-shadow-md">"{luna.description}"</p>
+                                                <div className="space-y-3">
+                                                    <StatBar label="Love" value={luna.stats.love} colorClass="text-rose-500" barColorClass="bg-rose-500" icon={Heart} />
+                                                    <StatBar label="Knowledge" value={luna.stats.knowledge} colorClass="text-blue-400" barColorClass="bg-blue-400" icon={Brain} />
+                                                    <StatBar label="Energy" value={luna.stats.energy} colorClass="text-emerald-400" barColorClass="bg-emerald-400" icon={Zap} />
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {luna.tags.map(tag => <span key={tag} className="px-2 py-0.5 bg-white/10 rounded-none text-[8px] xl:text-[10px] font-mulmaru uppercase opacity-70 border border-white/5 tracking-wider whitespace-nowrap">#{tag}</span>)}
+                                                </div>
                                             </motion.div>
-                                        </motion.div>
+                                        )}
                                     </AnimatePresence>
                                 </div>
+                            </motion.div>
+                        ))}
 
-                                {/* 스탯 패널 (호감도 게이지 느낌) */}
-                                <div className="w-full lg:w-[350px] xl:w-[450px] bg-black/50 p-6 xl:p-10 border-2 border-white/5 rounded-2xl shadow-inner">
-                                    <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-3">
-                                        <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 italic">Affection Analysis</span>
-                                        <div className="flex gap-1.5">
-                                            {[1, 2, 3].map(i => <div key={i} className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />)}
-                                        </div>
-                                    </div>
-
-                                    {lunaSelection === 'custom' ? (
-                                        <div className="py-8 text-center bg-purple-500/5 rounded-xl border border-purple-500/10">
-                                            <div className="text-purple-400 font-mono text-xs font-black tracking-widest animate-pulse uppercase mb-2">Syncing Soul Data...</div>
-                                            <div className="text-slate-500 text-[10px] italic">Deep learning character persona active.</div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            <StatBar label="Love" value={selectedLuna?.stats.love || 0} colorClass="bg-gradient-to-r from-pink-600 to-rose-400 shadow-[0_0_10px_rgba(219,39,119,0.3)]" />
-                                            <StatBar label="Intel" value={selectedLuna?.stats.knowledge || 0} colorClass="bg-gradient-to-r from-cyan-600 to-blue-400 shadow-[0_0_10px_rgba(8,145,178,0.3)]" />
-                                            <StatBar label="Energy" value={selectedLuna?.stats.energy || 0} colorClass="bg-gradient-to-r from-amber-500 to-orange-300 shadow-[0_0_10px_rgba(245,158,11,0.3)]" />
-                                        </div>
-                                    )}
+                        {/* CUSTOM CREATE */}
+                        <motion.div
+                            onMouseEnter={() => { setHoveredLuna('custom'); RetroSound.playHover(); }}
+                            onMouseLeave={() => setHoveredLuna(null)}
+                            whileHover={{ y: -20, scale: 1.15, zIndex: 100 }}
+                            onClick={() => { lunaCustomInputRef.current?.click(); RetroSound.playClick(); }}
+                            className={`relative w-[150px] xl:w-[240px] aspect-[4/6.2] cursor-pointer group transition-all duration-700 rounded-none overflow-hidden border-2 xl:border-4 border-dashed border-white/20 flex flex-col items-center justify-center bg-black/50 ${lunaSelection === 'custom' ? 'ring-4 xl:ring-8 ring-purple-600 shadow-[0_0_80px_rgba(147,51,234,0.6)] border-none' : 'hover:border-white/50'}`}
+                        >
+                            {lunaCustomPhoto ? <img src={lunaCustomPhoto} alt="Custom" className="w-full h-full object-cover image-rendering-pixelated" /> : (
+                                <div className="flex flex-col items-center gap-2 xl:gap-4 group-hover:scale-105 transition-transform px-4 text-center">
+                                    <div className="w-12 h-12 xl:w-20 xl:h-20 rounded-none border-2 border-white/20 flex items-center justify-center bg-white/5"><Plus size={32} className="text-white/30" /></div>
+                                    <span className="text-[10px] xl:text-xl font-mulmaru tracking-widest uppercase opacity-50 font-medium break-all">CREATE_SOUL</span>
                                 </div>
+                            )}
+                            <AnimatePresence>
+                                {hoveredLuna === 'custom' && (
+                                    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 30 }} className="absolute inset-0 bg-black/98 p-2 xl:p-3 flex flex-col justify-end" onClick={(e) => e.stopPropagation()}>
+                                        <div className="mb-4 text-left">
+                                            <div className="flex gap-2 xl:gap-3 mb-4 xl:mb-6">
+                                                {[{ id: 'female', icon: User, label: 'FEMALE' }, { id: 'male', icon: UserPlus, label: 'MALE' }, { id: 'animal', icon: Dog, label: 'ANIMAL' }].map(type => (
+                                                    <button key={type.id} onClick={() => { setCustomType(type.id); RetroSound.playClick(); }} onMouseEnter={() => RetroSound.playHover()} className={`flex-1 flex flex-col items-center gap-2 py-3 border-2 transition-all ${customType === type.id ? 'bg-purple-600 border-white text-white scale-105 shadow-lg' : 'bg-white/5 border-white/10 text-white/40'}`}><type.icon size={20} /><span className="text-[8px] font-mulmaru font-bold">{type.label}</span></button>
+                                                ))}
+                                            </div>
+                                            <div className="group mb-2 xl:mb-4">
+                                                <p className="text-[8px] font-mulmaru text-purple-400 mb-1 tracking-widest uppercase font-bold">[[ INPUT_NAME ]]</p>
+                                                <input type="text" value={customPartnerName} onChange={(e) => setCustomPartnerName(e.target.value)} className="bg-transparent border-b-2 border-white/10 outline-none text-xl xl:text-2xl font-mulmaru w-full pb-1 placeholder-white/5 focus:border-purple-600 transition-all font-medium" placeholder="NAME_YOUR_PARTNER" />
+                                            </div>
+                                            <div className="relative">
+                                                <p className="text-[8px] font-mulmaru text-purple-400 mb-1 tracking-widest uppercase font-bold">[[ ENTER_YOUR_STYLE ]]</p>
+                                                <textarea value={customPartnerSummary} onChange={(e) => setCustomPartnerSummary(e.target.value)} placeholder="CHOOSE LUNA'S DESTINY..." className="w-full bg-white/5 border border-white/10 p-2 xl:p-3 rounded-none outline-none text-[10px] xl:text-base font-dos text-purple-300 min-h-[50px] xl:min-h-[80px] resize-none leading-relaxed focus:border-purple-600" />
+                                                <button onClick={() => { handleRefinePersona(); RetroSound.playClick(); }} className="absolute right-2 bottom-2 bg-purple-600 p-2 rounded-none hover:bg-purple-500 shadow-lg">{isRefining ? <Loader2 className="animate-spin w-5 h-5" /> : <Wand2 className="w-5 h-5" />}</button>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4 pt-4 border-t border-purple-900/50">
+                                            <StatBar label="SOUL_SYNC" value={50} colorClass="text-purple-400" barColorClass="bg-purple-600" icon={Sparkles} />
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
+                    </div>
+                </main>
+
+                <footer className="mt-8 shrink-0 animate-fade-in">
+                    <div className="w-full max-w-[1400px] mx-auto bg-black/90 border-2 xl:border-4 border-white/10 rounded-none p-6 xl:p-10 flex flex-col md:flex-row items-center gap-10 xl:gap-20 relative overflow-hidden shadow-[0_50px_100px_rgba(0,0,0,0.8)]">
+                        <div className="shrink-0 flex flex-col items-center gap-3 group relative">
+                            <motion.div onClick={() => { userPhotoInputRef.current?.click(); RetroSound.playClick(); }} onMouseEnter={() => RetroSound.playHover()} whileHover={{ scale: 1.05, rotate: -2 }} className={`relative w-28 h-28 xl:w-44 xl:h-44 rounded-none overflow-hidden border-2 xl:border-4 cursor-pointer transition-all ${userPhoto ? 'border-rose-600 shadow-[0_0_50px_rgba(225,29,72,0.5)]' : 'border-white/30 hover:border-white shadow-xl'} bg-slate-950`}>
+                                {userPhoto ? <img src={userPhoto} alt="User" className="w-full h-full object-cover image-rendering-pixelated" /> : (
+                                    <div className="flex flex-col items-center justify-center h-full gap-3 text-white/30 group-hover:text-white/80 transition-all">
+                                        <Camera className="w-10 h-10 xl:w-20 xl:h-20" />
+                                        <span className="text-[10px] xl:text-xs font-mulmaru text-center px-4 tracking-widest leading-relaxed font-bold">UPLOAD<br />IDENT_DATA</span>
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-rose-600/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><Upload size={40} className="text-white scale-125" /></div>
+                            </motion.div>
+                            <span className="text-[10px] xl:text-xs font-mulmaru text-rose-500 font-bold tracking-[0.3em] uppercase drop-shadow-lg">[[ SOURCE_SYNC ]]</span>
+                        </div>
+
+                        <div className="flex-1 flex flex-col gap-6 w-full text-left">
+                            <div className="flex items-center gap-6">
+                                <div className="px-4 py-1.5 bg-rose-600 font-mulmaru text-[11px] xl:text-2xl uppercase tracking-[0.2em] shadow-xl font-bold">PLAYER_CODENAME</div>
+                                <div className="flex-1 h-[2px] bg-gradient-to-r from-rose-600/50 to-transparent" />
+                            </div>
+                            <div className="relative group overflow-hidden">
+                                <input
+                                    type="text"
+                                    value={userName}
+                                    onChange={(e) => setUserName(e.target.value)}
+                                    className="w-full bg-transparent border-b-2 xl:border-b-4 border-white/20 px-2 py-2 xl:py-6 font-dos text-3xl xl:text-7xl text-white outline-none focus:border-rose-600 transition-all placeholder:text-white/5 uppercase tracking-normal relative z-10"
+                                    placeholder="ENTER_YOUR_NAME"
+                                />
+                                <div className="absolute -bottom-1 left-0 w-0 h-1 xl:h-2 bg-rose-600 group-focus-within:w-full transition-all duration-700" />
                             </div>
                         </div>
-                    </div>
 
-                    {/* 가장 하단 시작 버튼 (START ADVENTURE 느낌) */}
-                    <div className="mt-10 mb-20 flex flex-col items-center">
-                        <motion.button
-                            whileHover={userPhoto ? { scale: 1.05 } : {}}
-                            whileTap={userPhoto ? { scale: 0.95 } : {}}
+                        <button
                             onClick={handleStart}
-                            disabled={!userPhoto}
-                            className={`group relative px-24 xl:px-40 py-6 xl:py-9 rounded-2xl font-black text-3xl xl:text-5xl italic tracking-tighter uppercase transition-all duration-500 shadow-[0_20px_40px_rgba(0,0,0,0.5)]
-                                ${!userPhoto
-                                    ? 'bg-slate-800 text-slate-600 grayscale border-4 border-slate-900 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-pink-600 via-purple-600 to-pink-600 bg-[length:200%_100%] hover:bg-[100%_0] border-4 border-white/20 text-white'
-                                }
-                            `}
+                            onMouseEnter={() => !isStarting && RetroSound.playHover()}
+                            disabled={!userPhoto || !userName.trim() || isStarting}
+                            className={`group relative px-10 xl:px-20 py-6 xl:py-10 rounded-[1.2rem] xl:rounded-[2rem] flex items-center justify-center font-mulmaru transition-all duration-300 active:scale-95 overflow-hidden ${(!userPhoto || !userName.trim() || isStarting) ? 'bg-slate-950 text-slate-800 opacity-20 cursor-not-allowed border-2 border-white/5 grayscale' : 'bg-rose-600 text-white hover:bg-rose-500 hover:scale-110 hover:shadow-[0_0_120px_rgba(225,29,72,0.9)] shadow-[0_0_60px_rgba(225,29,72,0.5)] border-4 border-white/30 hover:border-white'}`}
                         >
-                            <span className="flex items-center gap-8">
-                                START STORY
-                                <ArrowRight size={44} className="group-hover:translate-x-4 transition-transform duration-300" />
-                            </span>
-                        </motion.button>
-                        {!userPhoto && (
-                            <motion.p
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="mt-8 text-pink-500/[0.4] font-mono text-[11px] uppercase tracking-[0.5em] animate-pulse"
-                            >
-                                &lt;&lt; Warning: Identity Sync Required to Begin &gt;&gt;
-                            </motion.p>
-                        )}
-                        {userPhoto && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="mt-8 flex flex-col items-center gap-1"
-                            >
-                                <div className="px-6 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full">
-                                    <span className="text-emerald-400 text-xs font-black uppercase tracking-[0.4em] drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">READY TO START</span>
-                                </div>
-                                <span className="text-slate-600 text-[10px] font-bold uppercase tracking-widest mt-1 opacity-50">All systems green • Connection stable</span>
-                            </motion.div>
-                        )}
+                            <div className={`flex flex-col items-center leading-none translate-y-1 ${(!userPhoto || !userName.trim() || isStarting) ? '' : 'animate-game-blink group-hover:animate-none group-hover:scale-110 transition-transform'}`}>
+                                <span className="text-4xl xl:text-8xl font-bold tracking-normal leading-tight">START</span>
+                                <span className="text-[10px] xl:text-xl font-dos opacity-80 tracking-[0.4em] font-bold">JOURNEY</span>
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine rounded-[1.2rem] xl:rounded-[2rem] pointer-events-none" />
+                        </button>
                     </div>
-                </div>
+                </footer>
+
+                <input ref={userPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleUserPhotoUpload} />
+                <input ref={lunaCustomInputRef} type="file" accept="image/*" className="hidden" onChange={handleLunaCustomUpload} />
             </div>
 
-            {/* 인풋 태그들 */}
-            <input ref={userPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleUserPhotoUpload} />
-            <input ref={lunaCustomInputRef} type="file" accept="image/*" className="hidden" onChange={handleLunaCustomUpload} />
+            {/* FULL SCREEN LOADING OVERLAY local */}
+            <AnimatePresence>
+                {showLoadingOverlay && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
+                        <div className="absolute inset-0 pointer-events-none z-50 opacity-[0.1] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.1),rgba(0,255,0,0.05),rgba(0,0,255,0.1))] bg-[size:100%_4px,4px_100%]" />
+                        <div className="flex flex-col items-center gap-8">
+                            <div className="flex flex-col items-center">
+                                <h2 className="text-6xl xl:text-8xl font-mulmaru tracking-[0.3em] mb-4 text-rose-600 animate-pulse">LOADING{loadingDots}</h2>
+                                <p className="text-[10px] xl:text-sm font-dos text-white/40 tracking-[0.8em] uppercase">Initializing Destiny Neural Link</p>
+                            </div>
+                            <div className="w-64 xl:w-96 h-1 bg-white/10 rounded-none overflow-hidden relative">
+                                <motion.div initial={{ x: '-100%' }} animate={{ x: '0%' }} transition={{ duration: 1.2, ease: "linear" }} className="absolute inset-0 bg-rose-600 shadow-[0_0_20px_rgba(225,29,72,0.8)]" />
+                            </div>
+                            <div className="flex flex-col items-center gap-1 font-dos text-[8px] xl:text-[10px] text-rose-500/60 uppercase tracking-widest overflow-hidden h-4">
+                                <span className="animate-slide-up-loading opacity-80 italic">[[ ACCESSING_GPS_SATELLITE_COORDINATES... ]]</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @keyframes shine { 100% { transform: translateX(100%); } }
+                .animate-shine { animation: shine 1.5s infinite; }
+                .animate-fade-in { animation: fadeIn 1s ease-out forwards; }
+                .animate-slide-up { animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                .animate-game-blink { animation: blink 0.8s infinite steps(1); }
+                .animate-slide-up-loading { animation: slideUpLoading 2s infinite linear; }
+                @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+                @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                @keyframes slideUpLoading { 
+                    0% { transform: translateY(20px); opacity: 0; }
+                    10% { transform: translateY(0); opacity: 1; }
+                    90% { transform: translateY(0); opacity: 1; }
+                    100% { transform: translateY(-20px); opacity: 0; }
+                }
+                @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+                ::placeholder { font-family: 'DosStory', sans-serif !important; color: rgba(255,255,255,1) !important; }
+                input, textarea { font-family: 'DosStory', sans-serif !important; }
+                .font-mulmaru { font-family: 'MulmaruMono', sans-serif !important; }
+                .font-dos { font-family: 'DosStory', sans-serif !important; }
+            ` }} />
         </div>
     );
 }
