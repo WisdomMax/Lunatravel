@@ -1,12 +1,34 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Camera, Upload, CheckCircle, User, Sparkles, ArrowRight, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { LUNA_PERSONAS } from '../constants';
 
 // 루나 기본 이미지 3종 + 페르소나 매핑
 const LUNA_PRESETS = [
-    { id: 'luna-1', src: '/assets/luna/luna-1.webp', label: '루나 C (츤데레)', persona: LUNA_PERSONAS['luna-1'] },
-    { id: 'luna-2', src: '/assets/luna/luna-2.webp', label: '루나 B (섹시)', persona: LUNA_PERSONAS['luna-2'] },
-    { id: 'luna-3', src: '/assets/luna/luna-3.webp', label: '루나 A (발랄)', persona: LUNA_PERSONAS['luna-3'] },
+    {
+        id: 'luna-1',
+        src: '/assets/luna/luna-1.webp',
+        label: '루나 C',
+        subLabel: '츤데레 가이드',
+        description: '겉으론 까칠해도 속은 누구보다 따뜻해요. "흥, 나니까 알려주는 거야!"라며 툴툴대지만 모르는 게 없는 똑순이랍니다.',
+        persona: LUNA_PERSONAS['luna-1']
+    },
+    {
+        id: 'luna-2',
+        src: '/assets/luna/luna-2.webp',
+        label: '루나 B',
+        subLabel: '매혹적인 조력자',
+        description: '지적이고 차분한 매력 뒤에 묘한 설렘을 숨기고 있어요. 오빠와의 은밀한 썸을 즐기는 성숙한 여행 동반자예요.',
+        persona: LUNA_PERSONAS['luna-2']
+    },
+    {
+        id: 'luna-3',
+        src: '/assets/luna/luna-3.webp',
+        label: '루나 A',
+        subLabel: '해피 바이러스',
+        description: '오빠를 너무너무 좋아하는 귀염둥이 여동생! "오빠랑 있으면 어디든 좋아!"라며 무조건적인 호감을 표현해줄 거예요.',
+        persona: LUNA_PERSONAS['luna-3']
+    },
 ];
 
 interface SetupPageProps {
@@ -27,6 +49,8 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
     const userPhotoInputRef = useRef<HTMLInputElement>(null);
     const lunaCustomInputRef = useRef<HTMLInputElement>(null);
+
+    const selectedLuna = LUNA_PRESETS.find(p => p.id === lunaSelection);
 
     const handleUserPhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -51,7 +75,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
             localStorage.setItem('luna_custom_photo', base64);
             localStorage.setItem('luna_selection', 'custom');
             // 커스텀은 기본 페르소나 사용
-            localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-1']);
+            localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-3']); // 적극적인 성격 기본값
         };
         reader.readAsDataURL(file);
     }, []);
@@ -71,7 +95,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
         if (lunaSelection === 'custom' && lunaCustomPhoto) {
             localStorage.setItem('luna_photo', lunaCustomPhoto);
             if (!localStorage.getItem('luna_persona')) {
-                localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-1']);
+                localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-3']);
             }
         } else {
             const preset = LUNA_PRESETS.find(p => p.id === lunaSelection);
@@ -160,17 +184,17 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                         </div>
                         <div>
                             <h2 className="text-white font-semibold text-sm">루나 선택</h2>
-                            <p className="text-slate-400 text-xs">기본 3종 또는 직접 업로드</p>
+                            <p className="text-slate-400 text-xs text-xs">함께 여행할 루나의 성격을 골라보세요</p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-4 gap-3 mb-5">
                         {LUNA_PRESETS.map((preset) => (
                             <button
                                 key={preset.id}
                                 onClick={() => handleSelectPreset(preset.id)}
                                 className={`relative aspect-[3/4] rounded-xl overflow-hidden border-2 transition-all ${lunaSelection === preset.id
-                                    ? 'border-violet-400 shadow-lg shadow-violet-500/30'
+                                    ? 'border-violet-400 shadow-lg shadow-violet-500/30 scale-[1.05]'
                                     : 'border-slate-600 hover:border-slate-400'
                                     }`}
                             >
@@ -191,12 +215,12 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                                     }}
                                 />
                                 {lunaSelection === preset.id && (
-                                    <div className="absolute top-1.5 right-1.5">
+                                    <div className="absolute top-1.5 right-1.5 z-20">
                                         <CheckCircle size={16} className="text-violet-400 drop-shadow" />
                                     </div>
                                 )}
-                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
-                                    <p className="text-white text-xs text-center font-medium">{preset.label}</p>
+                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 z-10">
+                                    <p className="text-white text-[10px] text-center font-bold">{preset.label}</p>
                                 </div>
                             </button>
                         ))}
@@ -205,7 +229,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                         <button
                             onClick={() => lunaCustomInputRef.current?.click()}
                             className={`relative aspect-[3/4] rounded-xl overflow-hidden border-2 transition-all ${lunaSelection === 'custom'
-                                ? 'border-pink-400 shadow-lg shadow-pink-500/30'
+                                ? 'border-pink-400 shadow-lg shadow-pink-500/30 scale-[1.05]'
                                 : 'border-dashed border-slate-600 hover:border-slate-400'
                                 }`}
                         >
@@ -213,29 +237,54 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                                 <>
                                     <img src={lunaCustomPhoto} alt="커스텀" className="w-full h-full object-cover" />
                                     {lunaSelection === 'custom' && (
-                                        <div className="absolute top-1.5 right-1.5">
+                                        <div className="absolute top-1.5 right-1.5 z-20">
                                             <CheckCircle size={16} className="text-pink-400 drop-shadow" />
                                         </div>
                                     )}
-                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
-                                        <p className="text-white text-xs text-center font-medium">커스텀</p>
+                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 z-10">
+                                        <p className="text-white text-[10px] text-center font-bold">나만의 루나</p>
                                     </div>
                                 </>
                             ) : (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-slate-800/50">
                                     <Plus size={22} className="text-slate-400" />
-                                    <p className="text-slate-400 text-xs text-center">직접<br />업로드</p>
+                                    <p className="text-slate-400 text-[10px] text-center">직접<br />업로드</p>
                                 </div>
                             )}
                         </button>
                     </div>
                     <input ref={lunaCustomInputRef} type="file" accept="image/*" className="hidden" onChange={handleLunaCustomUpload} />
 
-                    <p className="mt-3 text-center text-slate-400 text-xs">
-                        {lunaSelection === 'custom'
-                            ? '✨ 커스텀 사진 선택됨'
-                            : `✨ ${LUNA_PRESETS.find(p => p.id === lunaSelection)?.label ?? ''} 선택됨`}
-                    </p>
+                    {/* 캐릭터 상세 설명 (게임 스타일) */}
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={lunaSelection}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-slate-800/50 border border-white/5 rounded-xl p-4 min-h-[100px] flex flex-col justify-center"
+                        >
+                            {lunaSelection === 'custom' ? (
+                                <div className="text-center">
+                                    <h3 className="text-pink-400 font-bold text-sm mb-1 uppercase tracking-tighter">Custom Persona</h3>
+                                    <p className="text-slate-300 text-xs leading-relaxed italic">
+                                        오빠가 직접 등록한 사진 속 루나와 함께 여행을 떠나요. 기본적으로 밝고 다정한 성격으로 설정됩니다! ❤️
+                                    </p>
+                                </div>
+                            ) : selectedLuna ? (
+                                <div className="text-center">
+                                    <div className="flex items-center justify-center gap-2 mb-1">
+                                        <div className="h-px w-8 bg-gradient-to-r from-transparent to-violet-500/50" />
+                                        <h3 className="text-violet-400 font-bold text-base uppercase tracking-widest">{selectedLuna.subLabel}</h3>
+                                        <div className="h-px w-8 bg-gradient-to-l from-transparent to-violet-500/50" />
+                                    </div>
+                                    <p className="text-slate-200 text-xs leading-relaxed max-w-[90%] mx-auto">
+                                        "{selectedLuna.description}"
+                                    </p>
+                                </div>
+                            ) : null}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
 
                 {/* 시작 버튼 */}
