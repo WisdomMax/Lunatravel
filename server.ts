@@ -10,6 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function startServer() {
   const app = express();
+  app.use(express.json({ limit: '50mb' })); // Base64 이미지 수신을 위해 용량 증가
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
   const PORT = Number(process.env.PORT) || 3000;
@@ -128,6 +130,56 @@ async function startServer() {
       res.json({ base64: Buffer.from(buffer).toString("base64") });
     } catch (e) {
       res.status(500).send("StreetView Proxy Failed");
+    }
+  });
+
+  // AI Travel Photo Generation
+  app.post("/api/generate-travel-photo", async (req, res) => {
+    try {
+      const { backgroundImage, userPhoto, lunaPhoto } = req.body;
+      const apiKey = process.env.VITE_GEMINI_API_KEY;
+
+      if (!apiKey) throw new Error("API Key missing");
+      const ai = new GoogleGenAI({ apiKey });
+
+      // Helper to convert base64 (with data:image/... prefix) to raw base64
+      const cleanBase64 = (b64: string) => b64.includes(",") ? b64.split(",")[1] : b64;
+
+      console.log("[AI-Photo] Generating combined travel photo...");
+
+      // Using gemini-2.0-flash-exp (or whichever model supports image generation/editing)
+      // Note: Nano Banana 2 might require specific prompt or model configuration
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Here are three reference images:\n1. A background travel location (Street View).\n2. A photo of a specific person (user).\n3. A photo of an AI character named 'Luna'.\n\nPlease create a single, high-quality, cinematic travel photo. Synthesize them so that both the user and Luna are naturally standing in the background location, looking like they are traveling together and posing for a candid shot. Maintain high character consistency for both subjects. The output should be only the final synthesized image."
+              },
+              { inlineData: { mimeType: "image/jpeg", data: cleanBase64(backgroundImage) } },
+              { inlineData: { mimeType: "image/jpeg", data: cleanBase64(userPhoto) } },
+              { inlineData: { mimeType: "image/jpeg", data: cleanBase64(lunaPhoto) } }
+            ]
+          }
+        ]
+      });
+
+      // Gemini 2.0 can return images in parts if configured, but often it might describe or we expect an image part
+      // If the model supports direct image generation as a response:
+      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+
+      if (imagePart?.inlineData) {
+        res.json({ base64: imagePart.inlineData.data });
+      } else {
+        // Fallback or error if no image returned
+        console.warn("[AI-Photo] No image part in response, might be text only:", response.text);
+        res.status(500).json({ error: "No image generated", message: response.text });
+      }
+    } catch (e: any) {
+      console.error("[AI-Photo] Failed:", e);
+      res.status(500).json({ error: e.message });
     }
   });
 

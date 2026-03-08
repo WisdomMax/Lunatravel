@@ -6,12 +6,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map, Marker, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useTravel } from '../context/TravelContext';
-import { MapPin, Navigation, Utensils, Camera, Info, ExternalLink, Map as MapIcon, ChevronLeft, Search } from 'lucide-react';
+import { MapPin, Navigation, Utensils, Camera, Info, ExternalLink, Map as MapIcon, ChevronLeft, Search, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_ZOOM } from '../constants';
 
 export default function TravelMap() {
-  const { state, moveTo, setViewMode } = useTravel();
+  const { state, moveTo, setViewMode, takeTravelPhoto } = useTravel();
   const [mapError, setMapError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const map = useMap();
@@ -218,6 +218,44 @@ export default function TravelMap() {
             >
               <ChevronLeft className="w-5 h-5" />
               Back to Map
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {state.viewMode === 'streetview' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="absolute top-20 right-6 z-50 pointer-events-auto"
+          >
+            <button
+              disabled={state.isGeneratingPhoto}
+              onClick={() => {
+                if (!map) return;
+                const sv = map.getStreetView();
+                const pov = sv.getPov();
+                const pos = sv.getPosition();
+                if (!pos) return;
+
+                takeTravelPhoto(
+                  { lat: pos.lat(), lng: pos.lng(), name: state.currentLocation.name },
+                  pov.heading,
+                  pov.pitch,
+                  sv.getZoom() || 1
+                );
+              }}
+              className={`bg-gradient-to-r from-pink-600 to-purple-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all active:scale-95 ${state.isGeneratingPhoto ? 'opacity-50 cursor-not-allowed scale-95' : 'hover:scale-105'
+                }`}
+            >
+              {state.isGeneratingPhoto ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <Camera className="w-6 h-6" />
+              )}
+              {state.isGeneratingPhoto ? '루나가 사진 보정 중...' : '루나와 사진 찍기'}
             </button>
           </motion.div>
         )}

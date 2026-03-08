@@ -21,6 +21,7 @@ interface TravelContextType {
   startLiveMode: () => Promise<void>;
   stopLiveMode: () => void;
   resetSession: () => void;
+  takeTravelPhoto: (location: Location, heading: number, pitch: number, zoom: number) => Promise<void>;
 }
 
 const TravelContext = createContext<TravelContextType | undefined>(undefined);
@@ -35,7 +36,9 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       isSpeaking: false,
       nearbyPlaces: [],
       viewMode: 'map' as const,
-      memory: {}
+      memory: {},
+      photos: [],
+      isGeneratingPhoto: false
     };
 
     if (saved) {
@@ -45,7 +48,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
           ...initialState,
           ...parsed,
           isThinking: false, // Reset runtime flags
-          isSpeaking: false
+          isSpeaking: false,
+          isGeneratingPhoto: false
         };
       } catch (e) {
         console.error('Failed to load storage:', e);
@@ -54,16 +58,17 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     return initialState;
   });
 
-  // PERSISTENCE: Save state to localStorage whenever history, location or memory changes
+  // PERSISTENCE: Save state to localStorage whenever history, location, memory or photos change
   useEffect(() => {
-    const { history, currentLocation, memory, nearbyPlaces } = state;
+    const { history, currentLocation, memory, nearbyPlaces, photos } = state;
     localStorage.setItem('luna_travel_state', JSON.stringify({
       history: history.slice(-20), // Only save recent history to avoid storage limits
       currentLocation,
       memory,
-      nearbyPlaces
+      nearbyPlaces,
+      photos: photos.slice(0, 10) // Only save last 10 photos
     }));
-  }, [state.history, state.currentLocation, state.memory, state.nearbyPlaces]);
+  }, [state.history, state.currentLocation, state.memory, state.nearbyPlaces, state.photos]);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveService, setLiveService] = useState<GeminiLiveService | null>(null);
@@ -489,6 +494,63 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     }
   }, [state.currentLocation, state.history, state.memory, streamer, stopLiveMode, moveTo]);
 
+  const takeTravelPhoto = useCallback(async (location: Location, heading: number, pitch: number, zoom: number) => {
+    setState(prev => ({ ...prev, isGeneratingPhoto: true }));
+    try {
+      const userPhoto = localStorage.getItem('user_photo');
+      const lunaPhoto = localStorage.getItem('luna_photo');
+      const apiKey = localStorage.getItem('google_maps_api_key') || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+      if (!userPhoto || !lunaPhoto) {
+        throw new Error('사용자 사진 또는 루나 사진이 등록되지 않았습니다. 셋업 페이지에서 등록해주세요.');
+      }
+
+      // 1. Fetch Street View background image based on current POV
+      console.log('[LunaPhoto] Fetching street view background...');
+      const bgResponse = await fetch(`/api/streetview?lat=${location.lat}&lng=${location.lng}&key=${apiKey}`);
+      const bgData = await bgResponse.json();
+      const backgroundImage = bgData.base64;
+
+      // 2. Call our synthesis API
+      console.log('[LunaPhoto] Calling AI synthesis API...');
+      const response = await fetch('/api/generate-travel-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backgroundImage,
+          userPhoto,
+          lunaPhoto
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '사진 생성에 실패했습니다.');
+      }
+
+      const { base64: resultUrl } = await response.json();
+      console.log('[LunaPhoto] Success! Adding to gallery.');
+
+      const newPhoto = {
+        id: Date.now().toString(),
+        url: `data:image/jpeg;base64,${resultUrl}`,
+        locationName: location.name || '알 수 없는 장소',
+        timestamp: Date.now()
+      };
+
+      setState(prev => ({
+        ...prev,
+        isGeneratingPhoto: false,
+        photos: [newPhoto, ...prev.photos].slice(0, 10)
+      }));
+
+    } catch (error: any) {
+      console.error('Failed to take travel photo:', error);
+      setState(prev => ({ ...prev, isGeneratingPhoto: false }));
+      alert(`📸 사진을 찍는 도중 문제가 발생했어요: ${error.message}`);
+    }
+  }, []);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -500,7 +562,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
   return (
     <TravelContext.Provider value={{
       state, sendMessage, moveTo, setViewMode, playAudio,
-      stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession
+      stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession,
+      takeTravelPhoto
     }}>
       {children}
     </TravelContext.Provider>

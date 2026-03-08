@@ -18,6 +18,13 @@ export interface Message {
   timestamp: number;
 }
 
+export interface TravelPhoto {
+  id: string;
+  url: string; // base64
+  locationName: string;
+  timestamp: number;
+}
+
 export interface TravelState {
   currentLocation: Location;
   history: Message[];
@@ -27,6 +34,8 @@ export interface TravelState {
   viewMode: 'map' | 'streetview';
   searchQuery?: string;
   memory: Record<string, string>;
+  photos: TravelPhoto[];
+  isGeneratingPhoto: boolean;
 }
 
 export interface Place {

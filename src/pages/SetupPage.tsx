@@ -1,11 +1,11 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Camera, RefreshCcw, Upload, CheckCircle, User, Sparkles, ArrowRight, Plus } from 'lucide-react';
+import { Camera, Upload, CheckCircle, User, Sparkles, ArrowRight, Plus } from 'lucide-react';
 
 // 루나 기본 이미지 3종
 const LUNA_PRESETS = [
-    { id: 'luna-1', src: '/assets/luna/luna-1.png', label: '루나 A' },
-    { id: 'luna-2', src: '/assets/luna/luna-2.png', label: '루나 B' },
-    { id: 'luna-3', src: '/assets/luna/luna-3.png', label: '루나 C' },
+    { id: 'luna-1', src: '/assets/luna/luna-1.webp', label: '루나 A' },
+    { id: 'luna-2', src: '/assets/luna/luna-2.webp', label: '루나 B' },
+    { id: 'luna-3', src: '/assets/luna/luna-3.webp', label: '루나 C' },
 ];
 
 interface SetupPageProps {
@@ -17,22 +17,15 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
         localStorage.getItem('user_photo') || ''
     );
 
-    // 선택된 루나 프리셋 ID ('luna-1' | 'luna-2' | 'luna-3' | 'custom')
     const [lunaSelection, setLunaSelection] = useState<string>(() =>
         localStorage.getItem('luna_selection') || 'luna-1'
     );
-    // 커스텀 업로드 base64
     const [lunaCustomPhoto, setLunaCustomPhoto] = useState<string>(() =>
         localStorage.getItem('luna_custom_photo') || ''
     );
 
     const userPhotoInputRef = useRef<HTMLInputElement>(null);
     const lunaCustomInputRef = useRef<HTMLInputElement>(null);
-
-    // 현재 루나 사진 (합성에 사용될 실제 이미지)
-    const currentLunaPhoto = lunaSelection === 'custom'
-        ? lunaCustomPhoto
-        : LUNA_PRESETS.find(p => p.id === lunaSelection)?.src || LUNA_PRESETS[0].src;
 
     const handleUserPhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -63,7 +56,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
     const handleSelectPreset = useCallback((presetId: string) => {
         setLunaSelection(presetId);
         localStorage.setItem('luna_selection', presetId);
-        // 루나 사진 저장 (프리셋은 경로 그대로 저장)
         const preset = LUNA_PRESETS.find(p => p.id === presetId);
         if (preset) {
             localStorage.setItem('luna_photo', preset.src);
@@ -72,7 +64,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
     const handleStart = useCallback(() => {
         if (!userPhoto) return;
-        // 선택된 루나 사진 최종 저장
         if (lunaSelection === 'custom' && lunaCustomPhoto) {
             localStorage.setItem('luna_photo', lunaCustomPhoto);
         } else {
@@ -84,7 +75,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
     return (
         <div className="min-h-screen w-screen bg-slate-900 flex items-center justify-center p-6 relative overflow-hidden">
-            {/* 배경 장식 */}
             <div className="absolute top-[-15%] left-[-10%] w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[120px] animate-pulse" />
             <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-pink-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1.5s' }} />
 
@@ -95,12 +85,8 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                         <Sparkles size={14} className="text-violet-400" />
                         <span className="text-violet-300 text-sm font-medium">AI 여행 친구 루나와 함께</span>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight mb-3">
-                        여행 시작 전 설정
-                    </h1>
-                    <p className="text-slate-400 text-base">
-                        사진을 등록하면 루나가 AI 여행 사진을 만들어드립니다 📸
-                    </p>
+                    <h1 className="text-4xl font-extrabold text-white tracking-tight mb-3">여행 시작 전 설정</h1>
+                    <p className="text-slate-400 text-base">사진을 등록하면 루나가 AI 여행 사진을 만들어드립니다 📸</p>
                 </div>
 
                 {/* 내 사진 등록 */}
@@ -117,7 +103,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                     </div>
 
                     <div className="flex gap-4 items-start">
-                        {/* 미리보기 */}
                         <div
                             onClick={() => userPhotoInputRef.current?.click()}
                             className="relative w-[120px] h-[160px] flex-shrink-0 rounded-xl overflow-hidden border-2 border-dashed border-slate-600 hover:border-blue-400 cursor-pointer transition-all group bg-slate-800/50"
@@ -137,7 +122,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                             )}
                         </div>
 
-                        {/* 안내 + 버튼 */}
                         <div className="flex-1">
                             <div className="p-3 bg-blue-500/10 border border-blue-400/20 rounded-lg mb-3">
                                 <p className="text-blue-300 text-xs leading-relaxed">
@@ -171,7 +155,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                     </div>
 
                     <div className="grid grid-cols-4 gap-3">
-                        {/* 프리셋 3종 */}
                         {LUNA_PRESETS.map((preset) => (
                             <button
                                 key={preset.id}
@@ -184,16 +167,15 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                                 <img
                                     src={preset.src}
                                     alt={preset.label}
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-cover bg-slate-800"
                                     onError={(e) => {
-                                        // 이미지 없으면 플레이스홀더
                                         const img = e.currentTarget;
                                         img.style.display = 'none';
                                         const parent = img.parentElement;
                                         if (parent && !parent.querySelector('.placeholder')) {
                                             const div = document.createElement('div');
                                             div.className = 'placeholder absolute inset-0 flex flex-col items-center justify-center bg-slate-800 gap-1';
-                                            div.innerHTML = `<span class="text-2xl">🤖</span><span class="text-slate-400 text-xs">${preset.label}</span>`;
+                                            div.innerHTML = `<span style="font-size:24px">🤖</span><span style="color:#94a3b8;font-size:11px">${preset.label}</span>`;
                                             parent.appendChild(div);
                                         }
                                     }}
@@ -239,12 +221,11 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                     </div>
                     <input ref={lunaCustomInputRef} type="file" accept="image/*" className="hidden" onChange={handleLunaCustomUpload} />
 
-                    {/* 선택된 루나 미리보기 힌트 */}
-                    {lunaSelection && (
-                        <p className="mt-3 text-center text-slate-400 text-xs">
-                            {lunaSelection === 'custom' ? '✨ 커스텀 사진 선택됨' : `✨ ${LUNA_PRESETS.find(p => p.id === lunaSelection)?.label} 선택됨`}
-                        </p>
-                    )}
+                    <p className="mt-3 text-center text-slate-400 text-xs">
+                        {lunaSelection === 'custom'
+                            ? '✨ 커스텀 사진 선택됨'
+                            : `✨ ${LUNA_PRESETS.find(p => p.id === lunaSelection)?.label ?? ''} 선택됨`}
+                    </p>
                 </div>
 
                 {/* 시작 버튼 */}

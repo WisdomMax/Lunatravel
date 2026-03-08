@@ -243,6 +243,56 @@ export default function TravelSidebar() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Travel Album Section (Gallery) */}
+      <AnimatePresence>
+        {(state.photos.length > 0 || state.isGeneratingPhoto) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            className="border-t border-slate-100 bg-white p-4"
+          >
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Camera className="w-3 h-3" />
+                Travel Album
+              </h3>
+              <span className="text-[10px] text-pink-500 font-bold">{state.photos.length} photos</span>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
+              {state.isGeneratingPhoto && (
+                <div className="flex-shrink-0 w-32 h-40 bg-slate-50 rounded-xl border-2 border-dashed border-pink-200 flex flex-col items-center justify-center gap-2 text-center p-2 snap-start">
+                  <Loader2 className="w-6 h-6 text-pink-500 animate-spin" />
+                  <p className="text-[10px] font-bold text-pink-600 leading-tight">Luna is<br />editing...</p>
+                </div>
+              )}
+
+              {state.photos.map((photo) => (
+                <motion.div
+                  key={photo.id}
+                  layoutId={photo.id}
+                  className="flex-shrink-0 w-32 h-40 group relative snap-start"
+                >
+                  <img
+                    src={photo.url}
+                    alt={photo.locationName}
+                    className="w-full h-full object-cover rounded-xl shadow-md border border-slate-100 group-hover:scale-[1.02] transition-transform cursor-pointer"
+                    onClick={() => {
+                      // 확대 보기 구현 (간이 브라우저 알림 또는 전역 모달)
+                      const win = window.open("", "_blank");
+                      win?.document.write(`<html><body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;"><img src="${photo.url}" style="max-width:100%;max-height:100%;"></body></html>`);
+                    }}
+                  />
+                  <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/60 to-transparent rounded-b-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <p className="text-[10px] text-white font-bold truncate">{photo.locationName}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Input Area */}
       <div className="p-4 border-t border-slate-100 bg-white">
         <form onSubmit={handleSubmit} className="relative">
