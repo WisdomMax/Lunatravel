@@ -1,0 +1,8 @@
+{
+  "name": "Aura: AI Travel Companion",
+  "description": "Explore the world with Aura, your AI travel companion. Chat, see the sights via Street View, and get local recommendations with voice interaction.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ]
+}

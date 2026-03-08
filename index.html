@@ -1,83 +1,13 @@
-<!DOCTYPE html>
-<html lang="ko">
-
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Travel Companion - World Explorer</title>
-  <link rel="stylesheet" href="./style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-</head>
-
-<body>
-  <div id="app">
-    <!-- Setup Overlay -->
-    <div id="setup-overlay" class="setup-overlay">
-      <div class="setup-content card">
-        <h2 id="setup-title">컴패니온 설정</h2>
-        <div id="setup-question-container">
-          <p id="question-text">나의 여행 동반자는 어떤 성격이었으면 좋겠어?</p>
-          <div id="setup-options" class="options-grid">
-            <!-- Options will be injected by JS -->
-          </div>
-        </div>
-        <div id="setup-input-container" class="hidden">
-          <p>더 자세한 특징이 있다면 알려줘!</p>
-          <textarea id="setup-detail-input" placeholder="예: 농담을 잘하고, 역사에 관심이 많아."></textarea>
-          <button id="setup-finish-button" class="primary-button">설정 완료</button>
-        </div>
-        <div id="setup-loading" class="hidden">
-          <p>나노바나나가 당신의 컴패니온을 그리고 있어요...</p>
-          <div class="loader"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Google Maps Street View Container -->
-    <div id="street-view"></div>
-
-    <!-- UI Layers -->
-    <div class="ui-overlay">
-      <header class="top-bar">
-        <div class="logo">
-          <h1 style="color: white; margin: 0; font-size: 24px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">World Explorer
-          </h1>
-        </div>
-        <div class="search-container">
-          <input type="text" id="search-input" placeholder="어디로 여행을 떠나볼까요?">
-          <button id="search-button">검색</button>
-        </div>
-      </header>
-
-      <!-- Info Panel (Recommendations) -->
-      <aside id="info-panel" class="info-panel card hidden">
-        <h3 style="margin-top: 0;">🚩 주변 추천 장소</h3>
-        <div id="places-list" class="places-list">
-          <!-- Places will be injected here -->
-        </div>
-      </aside>
-
-      <div class="snapshot-control">
-        <button id="snapshot-button" class="primary-button circular">📸</button>
-        <input type="file" id="user-photo-input" class="hidden" accept="image/*">
-      </div>
-
-      <main class="companion-section">
-        <div class="companion-container">
-          <div id="companion-dialog" class="dialog-bubble">
-            안녕! 오늘은 어디를 여행해볼까? 마음에 드는 곳을 검색해봐!
-          </div>
-          <div id="companion-avatar" class="companion-avatar">
-            🤖
-          </div>
-        </div>
-      </main>
-    </div>
-  </div>
-  <script type="module" src="/main.js"></script>
-</body>
-
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
+
