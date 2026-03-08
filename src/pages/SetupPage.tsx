@@ -4,9 +4,9 @@ import { LUNA_PERSONAS } from '../constants';
 
 // 루나 기본 이미지 3종 + 페르소나 매핑
 const LUNA_PRESETS = [
-    { id: 'luna-1', src: '/assets/luna/luna-1.webp', label: '루나 A (발랄)', persona: LUNA_PERSONAS['luna-1'] },
-    { id: 'luna-2', src: '/assets/luna/luna-2.webp', label: '루나 B (차분)', persona: LUNA_PERSONAS['luna-2'] },
-    { id: 'luna-3', src: '/assets/luna/luna-3.webp', label: '루나 C (츤데레)', persona: LUNA_PERSONAS['luna-3'] },
+    { id: 'luna-1', src: '/assets/luna/luna-1.webp', label: '루나 C (츤데레)', persona: LUNA_PERSONAS['luna-1'] },
+    { id: 'luna-2', src: '/assets/luna/luna-2.webp', label: '루나 B (섹시)', persona: LUNA_PERSONAS['luna-2'] },
+    { id: 'luna-3', src: '/assets/luna/luna-3.webp', label: '루나 A (발랄)', persona: LUNA_PERSONAS['luna-3'] },
 ];
 
 interface SetupPageProps {
