@@ -36,6 +36,7 @@ export interface TravelState {
   memory: Record<string, string>;
   photos: TravelPhoto[];
   isGeneratingPhoto: boolean;
+  persona: string;
 }
 
 export interface Place {

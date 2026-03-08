@@ -38,7 +38,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       viewMode: 'map' as const,
       memory: {},
       photos: [],
-      isGeneratingPhoto: false
+      isGeneratingPhoto: false,
+      persona: localStorage.getItem('luna_persona') || SYSTEM_INSTRUCTION
     };
 
     if (saved) {
@@ -60,15 +61,16 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
   // PERSISTENCE: Save state to localStorage whenever history, location, memory or photos change
   useEffect(() => {
-    const { history, currentLocation, memory, nearbyPlaces, photos } = state;
+    const { history, currentLocation, memory, nearbyPlaces, photos, persona } = state;
     localStorage.setItem('luna_travel_state', JSON.stringify({
       history: history.slice(-20), // Only save recent history to avoid storage limits
       currentLocation,
       memory,
       nearbyPlaces,
-      photos: photos.slice(0, 10) // Only save last 10 photos
+      photos: photos.slice(0, 10), // Only save last 10 photos
+      persona
     }));
-  }, [state.history, state.currentLocation, state.memory, state.nearbyPlaces, state.photos]);
+  }, [state.history, state.currentLocation, state.memory, state.nearbyPlaces, state.photos, state.persona]);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveService, setLiveService] = useState<GeminiLiveService | null>(null);
@@ -134,7 +136,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     }));
 
     try {
-      const { text: replyText, groundingMetadata, audioData } = await chatWithAura(text, apiHistory, state.currentLocation);
+      const { text: replyText, groundingMetadata, audioData } = await chatWithAura(text, apiHistory, state.currentLocation, state.persona);
 
       // Extract places from grounding if available
       const extractedPlaces: Place[] = [];
@@ -295,7 +297,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       let service: GeminiLiveService | null = null;
 
       const locationContext = `[MANDATORY CURRENT LOCATION]: ${state.currentLocation.name || 'London'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
-      const liveSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n${locationContext}`;
+      const liveSystemInstruction = `${state.persona}\n\n${locationContext}`;
 
       service = new GeminiLiveService(
         apiKey,

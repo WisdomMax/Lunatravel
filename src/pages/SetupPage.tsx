@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Camera, Upload, CheckCircle, User, Sparkles, ArrowRight, Plus } from 'lucide-react';
+import { LUNA_PERSONAS } from '../constants';
 
-// 루나 기본 이미지 3종
+// 루나 기본 이미지 3종 + 페르소나 매핑
 const LUNA_PRESETS = [
-    { id: 'luna-1', src: '/assets/luna/luna-1.webp', label: '루나 A' },
-    { id: 'luna-2', src: '/assets/luna/luna-2.webp', label: '루나 B' },
-    { id: 'luna-3', src: '/assets/luna/luna-3.webp', label: '루나 C' },
+    { id: 'luna-1', src: '/assets/luna/luna-1.webp', label: '루나 A (발랄)', persona: LUNA_PERSONAS['luna-1'] },
+    { id: 'luna-2', src: '/assets/luna/luna-2.webp', label: '루나 B (차분)', persona: LUNA_PERSONAS['luna-2'] },
+    { id: 'luna-3', src: '/assets/luna/luna-3.webp', label: '루나 C (츤데레)', persona: LUNA_PERSONAS['luna-3'] },
 ];
 
 interface SetupPageProps {
@@ -49,6 +50,8 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
             setLunaSelection('custom');
             localStorage.setItem('luna_custom_photo', base64);
             localStorage.setItem('luna_selection', 'custom');
+            // 커스텀은 기본 페르소나 사용
+            localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-1']);
         };
         reader.readAsDataURL(file);
     }, []);
@@ -59,6 +62,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
         const preset = LUNA_PRESETS.find(p => p.id === presetId);
         if (preset) {
             localStorage.setItem('luna_photo', preset.src);
+            localStorage.setItem('luna_persona', preset.persona);
         }
     }, []);
 
@@ -66,9 +70,15 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
         if (!userPhoto) return;
         if (lunaSelection === 'custom' && lunaCustomPhoto) {
             localStorage.setItem('luna_photo', lunaCustomPhoto);
+            if (!localStorage.getItem('luna_persona')) {
+                localStorage.setItem('luna_persona', LUNA_PERSONAS['luna-1']);
+            }
         } else {
             const preset = LUNA_PRESETS.find(p => p.id === lunaSelection);
-            if (preset) localStorage.setItem('luna_photo', preset.src);
+            if (preset) {
+                localStorage.setItem('luna_photo', preset.src);
+                localStorage.setItem('luna_persona', preset.persona);
+            }
         }
         onComplete();
     }, [userPhoto, lunaSelection, lunaCustomPhoto, onComplete]);
@@ -160,8 +170,8 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                                 key={preset.id}
                                 onClick={() => handleSelectPreset(preset.id)}
                                 className={`relative aspect-[3/4] rounded-xl overflow-hidden border-2 transition-all ${lunaSelection === preset.id
-                                        ? 'border-violet-400 shadow-lg shadow-violet-500/30'
-                                        : 'border-slate-600 hover:border-slate-400'
+                                    ? 'border-violet-400 shadow-lg shadow-violet-500/30'
+                                    : 'border-slate-600 hover:border-slate-400'
                                     }`}
                             >
                                 <img
@@ -195,8 +205,8 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                         <button
                             onClick={() => lunaCustomInputRef.current?.click()}
                             className={`relative aspect-[3/4] rounded-xl overflow-hidden border-2 transition-all ${lunaSelection === 'custom'
-                                    ? 'border-pink-400 shadow-lg shadow-pink-500/30'
-                                    : 'border-dashed border-slate-600 hover:border-slate-400'
+                                ? 'border-pink-400 shadow-lg shadow-pink-500/30'
+                                : 'border-dashed border-slate-600 hover:border-slate-400'
                                 }`}
                         >
                             {lunaCustomPhoto ? (
@@ -233,8 +243,8 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
                     onClick={handleStart}
                     disabled={!userPhoto}
                     className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-2xl ${userPhoto
-                            ? 'bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white shadow-violet-500/30 active:scale-[0.98]'
-                            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                        ? 'bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white shadow-violet-500/30 active:scale-[0.98]'
+                        : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                         }`}
                 >
                     {userPhoto ? (

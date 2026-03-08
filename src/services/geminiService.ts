@@ -10,7 +10,8 @@ import { Location } from "../types";
 export async function chatWithAura(
   message: string,
   history: { role: 'user' | 'model', parts: { text: string }[] }[],
-  location: Location
+  location: Location,
+  persona: string = SYSTEM_INSTRUCTION
 ) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const ai = new GoogleGenAI({ apiKey });
@@ -27,7 +28,7 @@ export async function chatWithAura(
         { role: 'user', parts: [{ text: `${locationContext}\n${concisenessHint}\n\n${message}` }] }
       ],
       config: {
-        systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+        systemInstruction: { parts: [{ text: persona }] },
         tools: [
           {
             functionDeclarations: [
