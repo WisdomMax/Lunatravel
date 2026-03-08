@@ -98,25 +98,16 @@ export default function TravelSidebar() {
             {isLiveMode ? <PhoneOff className="w-5 h-5" /> : <Phone className="w-5 h-5" />}
           </button>
           {state.isSpeaking && (
-            <div className="flex items-center gap-2">
-              <div className="flex gap-[2px] items-center h-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <motion.div
-                    key={i}
-                    animate={{ height: [4, 16, 4] }}
-                    transition={{ repeat: Infinity, duration: 0.5, delay: i * 0.1 }}
-                    className={`w-[2px] rounded-full ${isLiveMode ? 'bg-emerald-500' : 'bg-pink-500'}`}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={stopAudio}
-                className="p-2 rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100 transition-colors"
-                title="Stop speaking"
-              >
-                <Volume2 className="w-5 h-5" />
-              </button>
-            </div>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={stopAudio}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-500/40 hover:bg-red-600 active:scale-95 transition-all animate-pulse"
+              title="탭하면 바로 말 끊기!"
+            >
+              <VolumeX className="w-4 h-4" />
+              탭! 말 끊기
+            </motion.button>
           )}
         </div>
       </div>
