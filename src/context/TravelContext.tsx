@@ -393,16 +393,12 @@ export function TravelProvider({ children }: { children: ReactNode }) {
           }
 
           if (msg.audioData) {
-            // AI 오디오 재생 시작 → 마이크 뮤트(에코 루프백 차단)
             // console.log('[LunaLive] Receiving audio chunk, length:', msg.audioData.length);
-            streamer.muteRecording();
             streamer.playAudioChunk(msg.audioData).catch(e => console.error("Play error:", e));
             setState(prev => ({ ...prev, isSpeaking: true }));
           }
 
           if (msg.isEnd) {
-            // AI 대화 완전히 끝남 → 마이크 언뮤트(사용자 입력 대기)
-            streamer.unmuteRecording();
             setState(prev => ({ ...prev, isSpeaking: false }));
           }
 
