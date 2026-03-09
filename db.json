@@ -1,0 +1,90 @@
+{
+  "user_name": "위즈덤",
+  "luna_selection": "luna-3",
+  "luna_persona": "",
+  "luna_photo": "/assets/luna/luna-3.webp",
+  "user_photo": "",
+  "luna_voice": "Aoede",
+  "luna_name": "Luna C",
+  "photos": [
+    {
+      "id": "1772998529684",
+      "url": "/photos/Travel_1772998529659.jpg",
+      "timestamp": 1772998529684
+    },
+    {
+      "id": "1772999084128",
+      "url": "/photos/Travel_1772999084105.jpg",
+      "timestamp": 1772999084128
+    },
+    {
+      "id": "1772999155917",
+      "url": "/photos/Travel_1772999155896.jpg",
+      "timestamp": 1772999155917
+    },
+    {
+      "id": "1772999595084",
+      "url": "/photos/Travel_1772999595062.jpg",
+      "timestamp": 1772999595084
+    },
+    {
+      "id": "1773000165734",
+      "url": "/photos/Travel_1773000165713.jpg",
+      "timestamp": 1773000165734
+    },
+    {
+      "id": "1773000583351",
+      "url": "/photos/Travel_1773000583328.jpg",
+      "timestamp": 1773000583351
+    },
+    {
+      "id": "1773002146544",
+      "url": "/photos/Travel_1773002146519.jpg",
+      "timestamp": 1773002146544
+    },
+    {
+      "id": "1773002567650",
+      "url": "/photos/Travel_1773002567626.jpg",
+      "timestamp": 1773002567650
+    },
+    {
+      "id": "1773002795798",
+      "url": "/photos/Travel_1773002795779.jpg",
+      "timestamp": 1773002795798
+    }
+  ],
+  "bookmarks": [
+    {
+      "name": "미국 10004 뉴욕",
+      "location": {
+        "lat": 40.6892494,
+        "lng": -74.04450039999999,
+        "name": "미국 10004 뉴욕"
+      },
+      "type": "other",
+      "id": "bookmark-1773000392626"
+    },
+    {
+      "name": "Liberty Island, 1 Audrey Zapp Dr, Jersey City, NJ 07305 미국",
+      "location": {
+        "lat": 40.68990051676037,
+        "lng": -74.04712468385696,
+        "name": "Liberty Island, 1 Audrey Zapp Dr, Jersey City, NJ 07305 미국"
+      },
+      "type": "other",
+      "id": "bookmark-1773000474169"
+    },
+    {
+      "name": "MXR3+7P 미국 뉴욕",
+      "location": {
+        "lat": 40.690747121854216,
+        "lng": -74.04564429286603,
+        "name": "MXR3+7P 미국 뉴욕"
+      },
+      "type": "other",
+      "id": "bookmark-1773000520848"
+    }
+  ],
+  "luna_custom_photo": "/uploads/1772994037599_custom_luna.webp",
+  "custom_partner_name": "루나"
+}

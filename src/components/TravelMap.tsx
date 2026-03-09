@@ -6,12 +6,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map, Marker, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useTravel } from '../context/TravelContext';
-import { MapPin, Navigation, Utensils, Camera, Info, ExternalLink, Map as MapIcon, ChevronLeft, Search, Loader2 } from 'lucide-react';
+import { Search, MapPin, Loader2, Navigation, Utensils, Camera, ExternalLink, ChevronLeft, Map as MapIcon, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_ZOOM } from '../constants';
 
 export default function TravelMap() {
-  const { state, moveTo, setViewMode, takeTravelPhoto } = useTravel();
+  const { state, setViewMode, takeTravelPhoto, moveTo, addBookmark } = useTravel();
   const [mapError, setMapError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const map = useMap();
@@ -156,7 +156,11 @@ export default function TravelMap() {
           <AdvancedMarker position={state.currentLocation}>
             <div className="relative flex items-center justify-center">
               <div className="absolute w-12 h-12 bg-pink-500/20 rounded-full animate-ping" />
-              <Pin background={'#DB2777'} borderColor={'#9D174D'} glyphColor={'white'} scale={1.2}>
+              <Pin
+                background={'#DB2777'}
+                borderColor={'#9D174D'}
+                scale={1.2}
+              >
                 <Navigation className="text-white w-4 h-4" />
               </Pin>
             </div>
@@ -172,9 +176,11 @@ export default function TravelMap() {
                 <Pin
                   background={place.type === 'restaurant' ? '#F59E0B' : '#3B82F6'}
                   borderColor={place.type === 'restaurant' ? '#92400E' : '#1E40AF'}
-                  glyphColor={'white'}
                 >
-                  {place.type === 'restaurant' ? <Utensils className="w-3 h-3" /> : <Camera className="w-3 h-3" />}
+                  {place.type === 'restaurant' ?
+                    <Utensils className="w-3.5 h-3.5 text-white" fill="white" /> :
+                    <Camera className="w-3.5 h-3.5 text-white" fill="white" />
+                  }
                 </Pin>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                   <div className="bg-white p-3 rounded-xl shadow-xl border border-slate-100 min-w-[150px]">
@@ -255,7 +261,7 @@ export default function TravelMap() {
               ) : (
                 <Camera className="w-6 h-6" />
               )}
-              {state.isGeneratingPhoto ? '루나가 사진 보정 중...' : '루나와 사진 찍기'}
+              {state.isGeneratingPhoto ? '사진 보정 중...' : '같이 사진 찍기'}
             </button>
           </motion.div>
         )}
@@ -271,7 +277,7 @@ export default function TravelMap() {
             className="absolute top-20 left-6 z-10 flex flex-col gap-2 max-w-[250px]"
           >
             <div className="bg-white/80 backdrop-blur-md p-2 rounded-xl border border-white/20 shadow-lg mb-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Aura's Picks</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Luna's Pick</p>
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto max-h-[300px] pr-2 scrollbar-hide">
               {state.nearbyPlaces.map((place) => (
@@ -329,16 +335,23 @@ export default function TravelMap() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute top-24 right-6 z-10"
+            className="absolute top-24 right-6 z-10 flex flex-col items-end gap-2"
           >
-            <div className="bg-white/90 backdrop-blur-md p-3 px-4 rounded-2xl shadow-xl border border-white/20 flex items-center gap-3 max-w-[200px]">
+            <div className="bg-white/90 backdrop-blur-md p-3 px-4 rounded-2xl shadow-xl border border-white/20 flex items-center gap-3 max-w-[220px]">
               <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <MapPin className="text-pink-600 w-4 h-4" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 pr-2">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pin</p>
                 <p className="text-xs font-bold text-slate-900 truncate">{state.currentLocation.name}</p>
               </div>
+              <button
+                onClick={() => addBookmark(state.currentLocation)}
+                className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
+                title="장소 저장하기"
+              >
+                <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === state.currentLocation.name) ? 'fill-pink-500' : ''}`} />
+              </button>
             </div>
           </motion.div>
         )}
@@ -353,11 +366,18 @@ export default function TravelMap() {
             exit={{ opacity: 0, y: 10 }}
             className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50"
           >
-            <div className="bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl shadow-xl border border-white/30 flex items-center gap-3">
+            <div className="bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl shadow-xl border border-white/30 flex items-center gap-4">
               <div className="w-7 h-7 bg-pink-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <MapPin className="text-pink-600 w-3.5 h-3.5" />
               </div>
               <p className="text-sm font-semibold text-slate-800 max-w-[300px] truncate">{state.currentLocation.name}</p>
+              <button
+                onClick={() => addBookmark(state.currentLocation)}
+                className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
+                title="장소 저장하기"
+              >
+                <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === state.currentLocation.name) ? 'fill-pink-500' : ''}`} />
+              </button>
             </div>
           </motion.div>
         )}

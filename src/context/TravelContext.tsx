@@ -5,7 +5,7 @@
 
 import { useEffect, useState, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { TravelState, Message, Location, Place } from '../types';
-import { chatWithAura } from '../services/geminiService';
+import { chatWithLuna } from '../services/geminiService';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { AudioStreamer } from '../utils/audioStreamer';
 import { INITIAL_LOCATION, SYSTEM_INSTRUCTION, LUNA_PERSONAS } from '../constants';
@@ -22,6 +22,9 @@ interface TravelContextType {
   stopLiveMode: () => void;
   resetSession: () => void;
   takeTravelPhoto: (location: Location, heading: number, pitch: number, zoom: number) => Promise<void>;
+  deletePhoto: (photoId: string) => Promise<void>;
+  addBookmark: (location: Location) => Promise<void>;
+  removeBookmark: (bookmarkId: string) => Promise<void>;
 }
 
 const TravelContext = createContext<TravelContextType | undefined>(undefined);
@@ -38,9 +41,12 @@ const getInitialState = (): TravelState => {
     viewMode: 'map' as const,
     memory: {},
     photos: [],
+    bookmarks: [],
+    persona: '',
+    lunaName: localStorage.getItem('luna_name') || 'Luna',
+    lunaPhoto: localStorage.getItem('luna_photo') || '',
+    lunaSelection: localStorage.getItem('luna_selection') || 'luna-1',
     isGeneratingPhoto: false,
-    persona: localStorage.getItem('luna_persona') || SYSTEM_INSTRUCTION,
-    lunaName,
     isLiveMode: false,
   };
 
@@ -74,26 +80,77 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     const personaKey = localStorage.getItem('luna_selection') || 'luna-1';
     const userName = localStorage.getItem('user_name') || '사용자';
 
+    let base = '';
     if (personaKey === 'custom') {
-      return localStorage.getItem('luna_persona') || SYSTEM_INSTRUCTION;
+      base = localStorage.getItem('luna_persona') || SYSTEM_INSTRUCTION;
+    } else {
+      base = LUNA_PERSONAS[personaKey as keyof typeof LUNA_PERSONAS] || LUNA_PERSONAS['luna-1'];
     }
 
-    let base = LUNA_PERSONAS[personaKey as keyof typeof LUNA_PERSONAS] || LUNA_PERSONAS['luna-1'];
-    return base.replace(/{userName}/g, userName);
+    // 이름 치환 및 명시적 인지 강화
+    const processedBase = base.replace(/{userName}/g, userName);
+    return `${processedBase}\n\n[CONFIDENTIAL SYSTEM NOTE]: You are currently traveling with "${userName}". Use this name ("${userName}") naturally when addressing the user, following your assigned persona (e.g., A calls "${userName}", "너", or "야", B calls "${userName}님", C calls "${userName} 오빠" or "오빠"). Never forget the user's name is "${userName}".`;
   }, []);
 
   useEffect(() => {
-    const { history, currentLocation, memory, nearbyPlaces, photos, persona, lunaName } = state;
-    localStorage.setItem('luna_travel_state', JSON.stringify({
-      history: history.slice(-20),
-      currentLocation,
-      memory,
-      nearbyPlaces,
-      photos: photos.slice(0, 10),
-      persona,
-      lunaName
-    }));
-  }, [state.history, state.currentLocation, state.memory, state.nearbyPlaces, state.photos, state.persona, state.lunaName]);
+    const { history, currentLocation, memory, persona, lunaName, lunaSelection, photos, bookmarks } = state;
+    try {
+      localStorage.setItem('luna_travel_state', JSON.stringify({
+        history: history.slice(-10),
+        currentLocation,
+        memory,
+        persona,
+        lunaName,
+        lunaSelection,
+        photos: photos.slice(0, 5), // 최소한의 최신 사진만 유지
+        bookmarks
+      }));
+    } catch (e) {
+      console.warn('Failed to save travel state to localStorage:', e);
+      try {
+        localStorage.setItem('luna_travel_state', JSON.stringify({
+          history: [],
+          currentLocation,
+          memory,
+          persona,
+          lunaName,
+          lunaSelection,
+          photos: [],
+          bookmarks: []
+        }));
+      } catch (e2) {
+        console.error('Final attempt to save state failed:', e2);
+      }
+    }
+  }, [state.history, state.currentLocation, state.memory, state.persona, state.lunaName, state.lunaSelection, state.photos, state.bookmarks]);
+
+  // 서버 설정 동기화
+  useEffect(() => {
+    const loadServerSettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        if (data) {
+          setState(prev => ({
+            ...prev,
+            lunaName: data.luna_name || prev.lunaName,
+            lunaPhoto: data.luna_photo || prev.lunaPhoto,
+            lunaSelection: data.luna_selection || prev.lunaSelection,
+            photos: data.photos || prev.photos,
+            bookmarks: data.bookmarks || prev.bookmarks,
+          }));
+          if (data.user_name) localStorage.setItem('user_name', data.user_name);
+          if (data.luna_selection) localStorage.setItem('luna_selection', data.luna_selection);
+          if (data.luna_photo) localStorage.setItem('luna_photo', data.luna_photo);
+          if (data.user_photo) localStorage.setItem('user_photo', data.user_photo);
+          if (data.luna_voice) localStorage.setItem('luna_voice', data.luna_voice);
+        }
+      } catch (err) {
+        console.warn("Failed to load server settings in context");
+      }
+    };
+    loadServerSettings();
+  }, []);
 
   const stopAudio = useCallback(() => {
     audioElement.pause();
@@ -121,11 +178,26 @@ export function TravelProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const moveTo = useCallback((location: Location, name?: string, goStreetView = false) => {
+    // 1. 먼저 위치 상태 업데이트 (부드러운 이동을 위해)
     setState(prev => ({
       ...prev,
-      currentLocation: { ...location, name: name || location.name },
+      currentLocation: { ...location, name: name || location.name || prev.currentLocation.name },
       viewMode: goStreetView ? 'streetview' : prev.viewMode
     }));
+
+    // 2. 이름이 없는 경우 역지오코딩 시도
+    if (!name && !location.name && typeof google !== 'undefined' && google.maps?.Geocoder) {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ location: { lat: location.lat, lng: location.lng } }, (results, status) => {
+        if (status === 'OK' && results?.[0]) {
+          const address = results[0].formatted_address;
+          setState(prev => ({
+            ...prev,
+            currentLocation: { ...prev.currentLocation, name: address }
+          }));
+        }
+      });
+    }
   }, []);
 
   const syncLocationContext = useCallback((location: Location, name?: string) => {
@@ -158,7 +230,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
     try {
       const voiceName = localStorage.getItem('luna_voice') || 'Aoede';
-      const { text: replyText, groundingMetadata, audioData } = await chatWithAura(text, apiHistory, state.currentLocation, getDynamicInstruction(), voiceName);
+      const { text: replyText, groundingMetadata, audioData } = await chatWithLuna(text, apiHistory, state.currentLocation, getDynamicInstruction());
 
       const extractedPlaces: Place[] = [];
       const groundingChunks = groundingMetadata?.groundingChunks || [];
@@ -305,7 +377,11 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       const lunaPhoto = localStorage.getItem('luna_photo');
       const apiKey = localStorage.getItem('google_maps_api_key') || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-      if (!userPhoto || !lunaPhoto) throw new Error('사용자 또는 루나 사진이 없습니다.');
+      if (!userPhoto || userPhoto === "") {
+        alert("플레이어 사진이 설정되지 않았습니다. 설정 화면에서 사진을 먼저 등록해주세요!");
+        throw new Error('사용자 사진 정보가 없습니다.');
+      }
+      if (!lunaPhoto || lunaPhoto === "") throw new Error('루나 사진 정보가 없습니다.');
 
       const response = await fetch('/api/generate-travel-photo', {
         method: 'POST',
@@ -338,11 +414,81 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const deletePhoto = useCallback(async (photoId: string) => {
+    try {
+      const response = await fetch('/api/delete-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoId })
+      });
+
+      if (response.ok) {
+        setState(prev => ({
+          ...prev,
+          photos: prev.photos.filter(p => p.id !== photoId)
+        }));
+      }
+    } catch (err) {
+      console.error("Delete photo error:", err);
+    }
+  }, []);
+
+  const addBookmark = useCallback(async (location: Location) => {
+    try {
+      const response = await fetch('/api/bookmarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookmark: {
+            name: location.name || 'Saved Location',
+            location,
+            type: 'other'
+          }
+        })
+      });
+
+      if (response.ok) {
+        const { bookmarks } = await response.json();
+        setState(prev => ({ ...prev, bookmarks }));
+      }
+    } catch (err) {
+      console.error("Add bookmark error:", err);
+    }
+  }, []);
+
+  const removeBookmark = useCallback(async (bookmarkId: string) => {
+    try {
+      const response = await fetch('/api/delete-bookmark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookmarkId })
+      });
+
+      if (response.ok) {
+        const { bookmarks } = await response.json();
+        setState(prev => ({ ...prev, bookmarks }));
+      }
+    } catch (err) {
+      console.error("Remove bookmark error:", err);
+    }
+  }, []);
+
   return (
     <TravelContext.Provider value={{
-      state, sendMessage, moveTo, setViewMode, playAudio,
-      stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession,
-      takeTravelPhoto
+      state,
+      sendMessage,
+      moveTo,
+      setViewMode,
+      playAudio,
+      stopAudio,
+      isLiveMode,
+      startLiveMode,
+      stopLiveMode,
+      resetSession,
+      takeTravelPhoto,
+      deletePhoto,
+      addBookmark,
+      removeBookmark
     }}>
       {children}
     </TravelContext.Provider>

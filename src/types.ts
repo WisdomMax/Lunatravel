@@ -36,7 +36,12 @@ export interface TravelState {
   memory: Record<string, string>;
   photos: TravelPhoto[];
   isGeneratingPhoto: boolean;
+  bookmarks: Place[];
   persona: string;
+  lunaName: string;
+  lunaPhoto: string;
+  lunaSelection: string;
+  isLiveMode: boolean;
 }
 
 export interface Place {
