@@ -94,25 +94,24 @@ export class GeminiLiveService {
         const setupMessage = {
             setup: {
                 model: "models/gemini-2.5-flash-native-audio-latest",
-                generationConfig: {
-                    responseModalities: "audio", // Single string "audio" is required for 2.5-native-audio
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: {
-                                voiceName: "Callirrhoe" // Youthful, gentle feminine voice
+                generation_config: {
+                    response_modalities: ["audio"], // Array formats are standard in some versions
+                    speech_config: {
+                        voice_config: {
+                            prebuilt_voice_config: {
+                                voice_name: "Callirrhoe"
                             }
                         }
                     }
                 },
-                systemInstruction: {
+                system_instruction: {
                     parts: [{
                         text: this.systemInstruction
                     }]
                 },
                 tools: [
-                    { googleSearch: {} },
                     {
-                        functionDeclarations: [
+                        function_declarations: [
                             {
                                 name: "show_place_on_map",
                                 description: "채팅창에 특정 장소로 이동할 수 있는 클릭 가능한 링크 버튼을 생성합니다. 직접 지도를 이동시키지 않습니다.",
@@ -134,13 +133,13 @@ export class GeminiLiveService {
 
         console.log('[LunaLive] Setup Payload (Omitted sensitive parts):', {
             model: setupMessage.setup.model,
-            config: setupMessage.setup.generationConfig
+            config: (setupMessage.setup as any).generation_config
         });
         this.sendJson(setupMessage);
     }
 
     private handleServerMessage(message: any) {
-        // console.log('[LunaLive] Incoming Keys:', Object.keys(message).join(', '));
+        // if (!message.audioData) console.log('[LunaLive] From Gemini:', JSON.stringify(message).substring(0, 100));
 
         if (message.error) {
             console.error('[LunaLive] Server Error:', message.error);
@@ -226,6 +225,13 @@ export class GeminiLiveService {
             }
         }
 
+        // Handle grounding metadata (Google Search results)
+        if (message.groundingMetadata || message.grounding_metadata) {
+            const gm = message.groundingMetadata || message.grounding_metadata;
+            console.log('[LunaLive] GROUNDING METADATA RECEIVED:', JSON.stringify(gm, null, 2));
+            this.onMessage({ groundingMetadata: gm });
+        }
+
         // ✅ Root-level toolCall (실제 Gemini 서버에서 오는 형식!)
         // 로그 예시: { "toolCall": { "functionCalls": [{ "name": ..., "args": ..., "id": ... }] } }
         if (message.toolCall && message.toolCall.functionCalls) {
@@ -259,14 +265,14 @@ export class GeminiLiveService {
         const contextText = `[Context Update]:\n${historyText}${memoryText}\n\nYou are Luna, the friendly travel companion. Resume our journey!`;
 
         const message = {
-            clientContent: {
+            client_content: {
                 turns: [
                     {
                         role: "user",
                         parts: [{ text: contextText }]
                     }
                 ],
-                turnComplete: true
+                turn_complete: true
             }
         };
         this.sendJson(message);
@@ -276,11 +282,27 @@ export class GeminiLiveService {
         if (!this.isSetupFinished || this.ws?.readyState !== WebSocket.OPEN) return;
         // console.log('[LunaLive] Sending Audio Chunk...');
         const message = {
-            realtimeInput: {
-                mediaChunks: [
+            realtime_input: {
+                media_chunks: [
                     {
                         data: base64Data,
-                        mimeType: "audio/pcm;rate=16000"
+                        mime_type: "audio/pcm;rate=16000"
+                    }
+                ]
+            }
+        };
+        this.sendJson(message);
+    }
+
+    public sendVideo(base64Data: string) {
+        if (!this.isSetupFinished || this.ws?.readyState !== WebSocket.OPEN) return;
+        // console.log('[LunaLive] Sending Video Chunk...');
+        const message = {
+            realtime_input: {
+                media_chunks: [
+                    {
+                        data: base64Data,
+                        mime_type: "image/jpeg"
                     }
                 ]
             }
@@ -291,14 +313,14 @@ export class GeminiLiveService {
     public sendText(text: string) {
         if (this.ws?.readyState !== WebSocket.OPEN) return;
         const message = {
-            clientContent: {
+            client_content: {
                 turns: [
                     {
                         role: "user",
                         parts: [{ text }]
                     }
                 ],
-                turnComplete: true
+                turn_complete: true
             }
         };
         this.sendJson(message);
@@ -306,10 +328,12 @@ export class GeminiLiveService {
 
     public sendInterrupt() {
         if (this.ws?.readyState !== WebSocket.OPEN) return;
-        // 클라이언트에서 턴을 강제로 완료(turnComplete: true)하여 진행중인 모델 생성을 중단합니다.
+        // 클라이언트에서 턴을 강제로 완료하여 진행중인 모델 생성을 중단합니다.
+        // 일부 API 버전에서는 비어있는 turns가 필요할 수 있습니다.
         const message = {
-            clientContent: {
-                turnComplete: true
+            client_content: {
+                turns: [],
+                turn_complete: true
             }
         };
         this.sendJson(message);

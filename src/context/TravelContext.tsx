@@ -25,6 +25,7 @@ interface TravelContextType {
   deletePhoto: (photoId: string) => Promise<void>;
   addBookmark: (location: Location) => Promise<void>;
   removeBookmark: (bookmarkId: string) => Promise<void>;
+  sendLiveVideo: (base64: string) => void;
 }
 
 const TravelContext = createContext<TravelContextType | undefined>(undefined);
@@ -95,32 +96,27 @@ export function TravelProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { history, currentLocation, memory, persona, lunaName, lunaSelection, photos, bookmarks } = state;
     try {
+      // localStorage는 백업용으로 유지 (기존 슬라이싱 제거)
       localStorage.setItem('luna_travel_state', JSON.stringify({
-        history: history.slice(-10),
+        history,
         currentLocation,
         memory,
         persona,
         lunaName,
         lunaSelection,
-        photos: photos.slice(0, 5), // 최소한의 최신 사진만 유지
+        photos,
         bookmarks
       }));
+
+      // 서버에도 실시간 저장 (대화 내역 동기화)
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history })
+      }).catch(err => console.error("Failed to sync history to server:", err));
+
     } catch (e) {
       console.warn('Failed to save travel state to localStorage:', e);
-      try {
-        localStorage.setItem('luna_travel_state', JSON.stringify({
-          history: [],
-          currentLocation,
-          memory,
-          persona,
-          lunaName,
-          lunaSelection,
-          photos: [],
-          bookmarks: []
-        }));
-      } catch (e2) {
-        console.error('Final attempt to save state failed:', e2);
-      }
     }
   }, [state.history, state.currentLocation, state.memory, state.persona, state.lunaName, state.lunaSelection, state.photos, state.bookmarks]);
 
@@ -138,6 +134,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
             lunaSelection: data.luna_selection || prev.lunaSelection,
             photos: data.photos || prev.photos,
             bookmarks: data.bookmarks || prev.bookmarks,
+            history: data.history || prev.history, // 서버 히스토리 우선 로드
           }));
           if (data.user_name) localStorage.setItem('user_name', data.user_name);
           if (data.luna_selection) localStorage.setItem('luna_selection', data.luna_selection);
@@ -223,21 +220,100 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const apiHistory = state.history.map(msg => ({
+    const apiHistory = state.history.slice(-15).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model' as any,
       parts: [{ text: msg.text }]
     }));
 
     try {
       const voiceName = localStorage.getItem('luna_voice') || 'Aoede';
-      const { text: replyText, groundingMetadata, audioData } = await chatWithLuna(text, apiHistory, state.currentLocation, getDynamicInstruction());
+      const { text: replyText, groundingMetadata, toolCalls, audioData } = await chatWithLuna(text, apiHistory, state.currentLocation, getDynamicInstruction());
+
+      // REST 채팅에서의 도구 호출 처리
+      if (toolCalls && toolCalls.length > 0) {
+        for (const call of toolCalls) {
+          if (call.name === 'show_place_on_map') {
+            const args = call.args as any;
+            const placeName = args?.name;
+            if (placeName && typeof google !== 'undefined' && google.maps?.Geocoder) {
+              const geocoder = new google.maps.Geocoder();
+              geocoder.geocode({ address: placeName, location: state.currentLocation }, (results, status) => {
+                if (status === 'OK' && results?.[0]) {
+                  const loc = results[0].geometry.location;
+                  const newPlace: Place = {
+                    id: `rest-${Date.now()}`,
+                    name: placeName,
+                    location: { lat: loc.lat(), lng: loc.lng() },
+                    type: String(placeName).toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction'
+                  };
+                  setState(prev => ({
+                    ...prev,
+                    nearbyPlaces: prev.nearbyPlaces.some(p => p.name === placeName)
+                      ? prev.nearbyPlaces
+                      : [...prev.nearbyPlaces, newPlace]
+                  }));
+                  // 지도를 해당 장소로 즉시 이동 (사용자 요청: 스트리트뷰 전환 방지)
+                  moveTo(newPlace.location, placeName, false);
+                }
+              });
+            }
+          }
+        }
+      }
+
+      let finalReplyText = replyText;
+
+      // 텍스트 내 [[PLACE: ...]] 태그 추출하여 Luna's Pick에 동기화 (순차적 처리로 429 방지)
+      const placeTags = finalReplyText.match(/\[\[PLACE:(.*?)\]\]/g);
+      if (placeTags && typeof google !== 'undefined' && google.maps?.Geocoder) {
+        const geocoder = new google.maps.Geocoder();
+
+        // 태그들을 하나씩 처리하기 위한 재귀 함수
+        const processTag = (index: number) => {
+          if (index >= placeTags.length) return;
+
+          const tag = placeTags[index];
+          const name = tag.match(/\[\[PLACE:(.*?)\]\]/)?.[1].trim();
+
+          if (name && !state.nearbyPlaces.some(p => p.name === name)) {
+            geocoder.geocode({ address: name, location: state.currentLocation }, (results, status) => {
+              if (status === 'OK' && results?.[0]) {
+                const loc = results[0].geometry.location;
+                const newPlace: Place = {
+                  id: `tag-${Date.now()}-${Math.random()}`,
+                  name: name,
+                  location: { lat: loc.lat(), lng: loc.lng() },
+                  type: name.toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction'
+                };
+                setState(prev => ({
+                  ...prev,
+                  nearbyPlaces: prev.nearbyPlaces.some(p => p.name === name)
+                    ? prev.nearbyPlaces
+                    : [...prev.nearbyPlaces, newPlace]
+                }));
+              }
+              // 다음 태그 처리를 위해 300ms 대기 (속도 제한 준수)
+              setTimeout(() => processTag(index + 1), 300);
+            });
+          } else {
+            processTag(index + 1);
+          }
+        };
+
+        processTag(0);
+      }
 
       const extractedPlaces: Place[] = [];
       const groundingChunks = groundingMetadata?.groundingChunks || [];
-      for (const chunk of groundingChunks) {
+
+      const processGroundingChunk = (index: number) => {
+        if (index >= groundingChunks.length) return;
+
+        const chunk = groundingChunks[index];
         if (chunk.maps && chunk.maps.title) {
           const placeName = chunk.maps.title;
           const placeId = `ground-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+
           extractedPlaces.push({
             id: placeId,
             name: placeName,
@@ -257,18 +333,38 @@ export function TravelProvider({ children }: { children: ReactNode }) {
                   nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { ...p, location: newLoc } : p)
                 }));
               }
+              // 300ms 대기 후 다음 청크 처리
+              setTimeout(() => processGroundingChunk(index + 1), 300);
             });
+          } else {
+            processGroundingChunk(index + 1);
           }
+        } else {
+          processGroundingChunk(index + 1);
+        }
+      };
+
+      processGroundingChunk(0);
+
+      if (groundingMetadata?.groundingChunks) {
+        const links = groundingMetadata.groundingChunks
+          .map((c: any) => c.web?.url)
+          .filter(Boolean);
+        if (links.length > 0) {
+          const uniqueLinks = [...new Set(links)];
+          finalReplyText += "\n\n🔗 관련 정보:\n" + uniqueLinks.join("\n");
         }
       }
 
-      const aiMessage: Message = { id: (Date.now() + 1).toString(), role: 'model', text: replyText, timestamp: Date.now() };
+      const aiMessage: Message = { id: (Date.now() + 1).toString(), role: 'model', text: finalReplyText, timestamp: Date.now() };
       setState(prev => ({
         ...prev,
         history: [...prev.history, aiMessage],
         isThinking: false,
         isSpeaking: !!audioData,
-        nearbyPlaces: extractedPlaces.length > 0 ? [...prev.nearbyPlaces, ...extractedPlaces] : prev.nearbyPlaces
+        nearbyPlaces: extractedPlaces.length > 0
+          ? [...prev.nearbyPlaces, ...extractedPlaces.filter(ep => !prev.nearbyPlaces.some(p => p.name === ep.name))]
+          : prev.nearbyPlaces
       }));
       if (audioData) playAudio(audioData);
     } catch (error) {
@@ -307,6 +403,40 @@ export function TravelProvider({ children }: { children: ReactNode }) {
               return { ...prev, history, isThinking: false };
             });
           }
+          if (msg.groundingMetadata) {
+            console.log('[TravelContext] Live Grounding Metadata Received:', msg.groundingMetadata);
+            // 구글 검색 결과가 있는 경우, 메시지 끝에 링크 추가 시도
+            const gm = msg.groundingMetadata;
+            const chunks = gm.groundingChunks || gm.grounding_chunks || gm.supportChunks || gm.support_chunks || [];
+
+            // 다양한 경로에서 URL 추출 시도
+            const links: string[] = [];
+            chunks.forEach((c: any) => {
+              const url = c.web?.url || c.sourceMetadata?.uri || c.source_metadata?.uri || c.sourceMetadata?.url || c.source_metadata?.url;
+              if (url) links.push(url);
+            });
+
+            // search_entry_point 처리 (일부 모델에서 사용)
+            if (gm.searchEntryPoint?.htmlContent || gm.search_entry_point?.html_content) {
+              console.log('[TravelContext] Search entry point detected, but we prefer direct links if possible.');
+            }
+
+            if (links.length > 0) {
+              setState(prev => {
+                const history = [...prev.history];
+                const lastMsg = history[history.length - 1];
+                if (lastMsg && lastMsg.role === 'model' && lastMsg.id.startsWith('live-turn')) {
+                  const uniqueLinks = [...new Set(links)];
+                  const linkText = "\n\n🔗 관련 검색 결과:\n" + uniqueLinks.join("\n");
+                  // 내용이 중복되지 않도록 체크
+                  if (!lastMsg.text.includes(linkText.trim())) {
+                    history[history.length - 1] = { ...lastMsg, text: lastMsg.text + linkText };
+                  }
+                }
+                return { ...prev, history };
+              });
+            }
+          }
           if (msg.isEnd) setState(prev => ({ ...prev, isSpeaking: false }));
 
           if (msg.toolCall && msg.toolCall.name === 'show_place_on_map') {
@@ -339,7 +469,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
         },
         async () => {
           setIsLiveMode(true);
-          service.sendInitialHistory(state.history, state.memory);
+          // 라이브 모드에서도 최신 10개의 대화만 컨텍스트로 전달하여 성능 유지
+          service.sendInitialHistory(state.history.slice(-10), state.memory);
           await streamer.startRecording((base64) => service.sendAudio(base64));
         },
         () => setIsLiveMode(false),
@@ -488,7 +619,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       takeTravelPhoto,
       deletePhoto,
       addBookmark,
-      removeBookmark
+      removeBookmark,
+      sendLiveVideo: (base64: string) => liveService?.sendVideo(base64)
     }}>
       {children}
     </TravelContext.Provider>

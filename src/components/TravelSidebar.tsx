@@ -13,7 +13,7 @@ interface TravelSidebarProps {
 }
 
 export default function TravelSidebar({ onBack }: TravelSidebarProps) {
-  const { state, sendMessage, stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession, moveTo, deletePhoto, addBookmark, removeBookmark } = useTravel();
+  const { state, sendMessage, stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession, moveTo, deletePhoto, addBookmark, removeBookmark, sendLiveVideo } = useTravel();
   const [activeTab, setActiveTab] = useState<'chat' | 'album' | 'bookmarks'>('chat');
   const [input, setInput] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<any>(null);
@@ -21,24 +21,81 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
 
   const renderText = (text: string) => {
     if (!text) return null;
-    const parts = text.split(/(\[\[PLACE:.*?\]\])/g);
+
+    // 1. [[PLACE:...]] 우선 처리
+    // 2. Markdown 링크 처리 [text](url)
+    // 3. 일반 URL 처리
+    const combinedRegex = /(\[\[PLACE:.*?\]\]|\[.*?\]\(https?:\/\/.*?\)|https?:\/\/[^\s$.?#].[^\s]*)/g;
+    const parts = text.split(combinedRegex);
+
     return parts.map((part, i) => {
-      const match = part.match(/\[\[PLACE:(.*?)\]\]/);
-      if (match) {
-        const placeName = match[1].trim();
+      if (!part) return null;
+
+      // 1. PLACE 태그 확인
+      const placeMatch = part.match(/\[\[PLACE:(.*?)\]\]/);
+      if (placeMatch) {
+        const placeName = placeMatch[1].trim();
         return (
           <button
             key={i}
             onClick={() => {
-              // 장소 정보가 있는 경우 이동 로직 실행 (컨텍스트에서 장소 찾기 시도)
-              const place = state.nearbyPlaces.find(p => p.name.includes(placeName)) ||
-                state.bookmarks.find(b => b.name.includes(placeName));
+              // 1. 이름 정규화 및 다단계 검색어 준비
+              const fullName = placeName.trim();
+              const mdMatch = fullName.match(/(.*?)\((.*?)\)/);
+              const koreanPart = mdMatch ? mdMatch[1].trim() : fullName;
+              const englishPart = mdMatch ? mdMatch[2].trim() : '';
+
+              // 검색 우선순위: 영어 명칭 -> 전체 명칭 -> 한국어 명칭
+              const searchTerms = [englishPart, fullName, koreanPart].filter(t => t.length > 1);
+
+              // 주변 장소/북마크에서 먼저 찾기 (캐시된 데이터)
+              const cleanName = koreanPart;
+              const place = state.nearbyPlaces.find(p => p.name.includes(cleanName) || cleanName.includes(p.name)) ||
+                state.bookmarks.find(b => b.name.includes(cleanName) || cleanName.includes(b.name));
+
               if (place) {
-                moveTo(place.location, placeName, true);
-              } else {
-                // 장소를 못 찾으면 그냥 메시지 전송 (이동 요청)
-                sendMessage(`${placeName} 위치로 이동해줘`);
+                moveTo(place.location, place.name, false);
+                return;
               }
+
+              // 2. Geocoder 다단계 재귀 검색 함수
+              if (typeof google === 'undefined' || !google.maps?.Geocoder) return;
+              const geocoder = new google.maps.Geocoder();
+
+              const attemptSearch = (index: number) => {
+                if (index >= searchTerms.length) return;
+
+                const term = searchTerms[index];
+                geocoder.geocode({
+                  address: term,
+                  location: state.currentLocation
+                }, (results, status) => {
+                  if (status === 'OK' && results?.[0]) {
+                    const loc = results[0].geometry.location;
+                    moveTo({ lat: loc.lat(), lng: loc.lng(), name: term }, term, false);
+                  } else if (index === searchTerms.length - 1) {
+                    // 모든 지오코딩 실패 시 Places Service (상호명 검색) 시도
+                    if (google.maps.places?.PlacesService) {
+                      const service = new google.maps.places.PlacesService(document.createElement('div'));
+                      service.textSearch({
+                        query: fullName,
+                        location: state.currentLocation,
+                        radius: 50000 // 현재 위치 주변 50km 우선
+                      }, (resultsP, statusP) => {
+                        if (statusP === 'OK' && resultsP?.[0] && resultsP[0].geometry?.location) {
+                          const pLoc = resultsP[0].geometry.location;
+                          moveTo({ lat: pLoc.lat(), lng: pLoc.lng(), name: resultsP[0].name || fullName }, resultsP[0].name || fullName, false);
+                        }
+                      });
+                    }
+                  } else {
+                    // 실패 시 다음 키워드로 재시도
+                    attemptSearch(index + 1);
+                  }
+                });
+              };
+
+              attemptSearch(0);
             }}
             className="inline-flex items-center gap-1.5 px-2 py-1 my-1 bg-pink-50 text-pink-600 rounded-lg font-black text-xs hover:bg-pink-100 transition-colors border border-pink-200 shadow-sm mx-1 active:scale-95"
           >
@@ -47,6 +104,40 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
           </button>
         );
       }
+
+      // 2. Markdown 링크 확인 [text](url)
+      const mdMatch = part.match(/\[(.*?)\]\((https?:\/\/.*?)\)/);
+      if (mdMatch) {
+        const linkText = mdMatch[1].trim() || '정보 링크 🔗';
+        const linkUrl = mdMatch[2].trim();
+        return (
+          <a
+            key={i}
+            href={linkUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-1 my-1 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm mx-1 break-all underline decoration-blue-300 active:scale-95"
+          >
+            {linkText.includes('http') ? '정보 링크 🔗' : linkText}
+          </a>
+        );
+      }
+
+      // 3. 일반 URL 확인
+      if (part.match(/https?:\/\/[^\s$.?#].[^\s]*/)) {
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-1 my-1 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm mx-1 break-all underline decoration-blue-300 active:scale-95"
+          >
+            블로그/정보 링크 🔗
+          </a>
+        );
+      }
+
       return <span key={i}>{part}</span>;
     });
   };
@@ -84,6 +175,64 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
       recognitionRef.current.onend = () => setIsListening(false);
     }
   }, [sendMessage]);
+
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const captureIntervalRef = useRef<any>(null);
+
+  const startScreenShare = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 5 },
+        audio: false
+      });
+      screenStreamRef.current = stream;
+      setIsScreenSharing(true);
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      captureIntervalRef.current = setInterval(() => {
+        if (!ctx || !isLiveMode) return;
+
+        const scale = Math.min(768 / video.videoWidth, 768 / video.videoHeight);
+        canvas.width = video.videoWidth * scale;
+        canvas.height = video.videoHeight * scale;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+
+        if (sendLiveVideo) {
+          sendLiveVideo(base64);
+        }
+      }, 1000);
+
+      stream.getVideoTracks()[0].onended = () => stopScreenShare();
+      sendMessage("화면 공유를 시작했어! 이제 내가 보고 있는 화면을 같이 보며 얘기하자.");
+    } catch (err) {
+      console.error('Screen share error:', err);
+      setIsScreenSharing(false);
+    }
+  };
+
+  const stopScreenShare = () => {
+    if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    screenStreamRef.current = null;
+    setIsScreenSharing(false);
+  };
+
+  useEffect(() => {
+    if (!isLiveMode && isScreenSharing) {
+      stopScreenShare();
+    }
+  }, [isLiveMode, isScreenSharing]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,9 +280,31 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
           </div>
           <button
             onClick={isLiveMode ? stopLiveMode : startLiveMode}
-            className={`absolute -bottom-2 -right-2 w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-lg active:scale-90 z-20 ${isLiveMode ? 'bg-emerald-500 text-white animate-bounce' : 'bg-pink-600 text-white hover:bg-pink-500'}`}
+            className={`absolute -bottom-2 -right-2 w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-lg active:scale-90 z-20 transition-all ${isLiveMode ? 'bg-emerald-500 text-white animate-bounce' : 'bg-pink-600 text-white hover:bg-pink-500'}`}
+            title={isLiveMode ? "통화 종료" : "루나와 라이브 통화"}
           >
             {isLiveMode ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+          </button>
+
+          {/* 화면 공유 버튼: 라이브 모드일 때만 동작하지만 버튼은 균형을 위해 항상 표시 */}
+          <button
+            onClick={() => {
+              if (!isLiveMode) {
+                alert("루나와 먼저 라이브 통화를 시작해 주세요! 통화가 연결되면 화면을 같이 볼 수 있어요. 😊");
+                startLiveMode(); // 사용자 편의를 위해 통화도 같이 시작 시도
+                return;
+              }
+              isScreenSharing ? stopScreenShare() : startScreenShare();
+            }}
+            className={`absolute -bottom-2 -left-2 w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-lg active:scale-90 z-20 transition-all ${isScreenSharing
+              ? 'bg-amber-500 text-white animate-pulse'
+              : isLiveMode
+                ? 'bg-white text-amber-500 hover:bg-amber-50 shadow-amber-100'
+                : 'bg-white text-slate-300 hover:text-amber-400'
+              }`}
+            title={isScreenSharing ? "화면 공유 중지" : "루나와 화면 공유하며 여행하기"}
+          >
+            <Camera className={`w-4 h-4 ${isLiveMode && !isScreenSharing ? 'animate-bounce' : ''}`} />
           </button>
         </div>
 
@@ -271,9 +442,36 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
               exit={{ opacity: 0, x: 10 }}
               className="flex-1 overflow-y-auto p-4 space-y-4"
             >
+              {state.nearbyPlaces.length > 0 && (
+                <div className="space-y-3 pb-4 border-b border-slate-100">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-[11px] font-black text-pink-500 uppercase tracking-[0.2em]">루나의 추천 (Pick)</h3>
+                    <div className="px-2 py-0.5 bg-pink-50 text-pink-500 text-[10px] font-black rounded-full border border-pink-100">
+                      {state.nearbyPlaces.length}곳
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {state.nearbyPlaces.map((place) => (
+                      <div key={place.id} className="p-3 rounded-xl bg-pink-50/30 border border-pink-100/50 hover:bg-pink-50 transition-all group flex items-center justify-between">
+                        <div className="flex-1 min-w-0 pr-4 cursor-pointer" onClick={() => moveTo(place.location, place.name, false)}>
+                          <h4 className="text-xs font-black text-slate-800 truncate group-hover:text-pink-600">{place.name}</h4>
+                        </div>
+                        <button
+                          onClick={() => addBookmark(place.location)}
+                          className="p-1.5 text-pink-400 hover:text-pink-600 transition-colors"
+                          title="정식 북마크에 추가"
+                        >
+                          <Heart className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">저장된 위치</h3>
-                <div className="px-2 py-0.5 bg-pink-50 text-pink-500 text-[10px] font-black rounded-full border border-pink-100">
+                <div className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-black rounded-full border border-slate-200">
                   {state.bookmarks.length}곳
                 </div>
               </div>

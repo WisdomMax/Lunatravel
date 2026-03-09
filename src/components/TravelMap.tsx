@@ -82,8 +82,10 @@ export default function TravelMap() {
       }
     });
 
+    // StreetView 싱크 로직 최적화: 위치 변경 시마다 리스너를 재설정하지 않도록 함
     const positionListener = google.maps.event.addListener(streetView, 'position_changed', () => {
-      if (state.viewMode === 'streetview') {
+      // 쓰로틀링 효과를 위해 state.viewMode가 정확히 일치할 때만 처리
+      if (state.viewMode === 'streetview' && streetView.getVisible()) {
         const pos = streetView.getPosition();
         if (pos) {
           const newLoc = { lat: pos.lat(), lng: pos.lng() };
@@ -91,8 +93,9 @@ export default function TravelMap() {
             Math.pow(newLoc.lat - state.currentLocation.lat, 2) +
             Math.pow(newLoc.lng - state.currentLocation.lng, 2)
           );
-          if (dist > 0.0001) {
-            moveTo(newLoc);
+          // 20m 이상 이동했을 때만 업데이트하여 API 호출 빈도 감소
+          if (dist > 0.0002) {
+            moveTo(newLoc, state.currentLocation.name, false);
           }
         }
       }
@@ -102,7 +105,7 @@ export default function TravelMap() {
       google.maps.event.removeListener(visibilityListener);
       google.maps.event.removeListener(positionListener);
     };
-  }, [map, state.viewMode, state.currentLocation, setViewMode, moveTo]);
+  }, [map, state.viewMode, setViewMode, moveTo]); // currentLocation 의존성 제거
 
   useEffect(() => {
     if (map && state.currentLocation && state.viewMode === 'map') {
@@ -170,7 +173,7 @@ export default function TravelMap() {
             <AdvancedMarker
               key={place.id}
               position={place.location}
-              onClick={() => moveTo(place.location, place.name, true)}
+              onClick={() => moveTo(place.location, place.name, false)}
             >
               <div className="group relative">
                 <Pin
@@ -283,7 +286,7 @@ export default function TravelMap() {
               {state.nearbyPlaces.map((place) => (
                 <button
                   key={place.id}
-                  onClick={() => moveTo(place.location, place.name, true)}
+                  onClick={() => moveTo(place.location, place.name, false)}
                   className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-md border border-white/20 flex items-center gap-3 text-left hover:bg-white transition-all active:scale-[0.98] group"
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${place.type === 'restaurant' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
