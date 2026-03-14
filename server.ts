@@ -596,6 +596,28 @@ ${customPrompt && customPrompt.trim().length > 0 ? `**SPECIAL USER REQUEST (HIGH
     }
   });
 
+  // 사진 삭제 API
+  app.post("/api/delete-photo", async (req, res) => {
+    try {
+      const { photoId } = req.body;
+      const settings = await getDB();
+      
+      if (settings.photo_histories) {
+        // 모든 캐릭터(luna-1, luna-2, custom 등)의 사진첩에서 해당 ID를 삭제
+        Object.keys(settings.photo_histories).forEach(key => {
+          if (Array.isArray(settings.photo_histories[key])) {
+            settings.photo_histories[key] = settings.photo_histories[key].filter((p: any) => p.id !== photoId);
+          }
+        });
+        await saveDB(settings);
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[Delete-Photo] Failed:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // 북마크 삭제 API
   app.post("/api/delete-bookmark", async (req, res) => {
     try {

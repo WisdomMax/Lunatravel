@@ -130,6 +130,32 @@ export default function TravelMap() {
   }, [map, state.currentLocation, state.viewMode]);
 
   const handleMapClick = (e: any) => {
+    // 1. POI(Point of Interest) 클릭 여부 확인
+    if (e.detail.placeId) {
+      const placeId = e.detail.placeId;
+      console.log('[Map] POI Clicked:', placeId);
+      
+      // POI 기본 정보창 방지
+      e.stop();
+
+      if (typeof google !== 'undefined' && google.maps?.places && map) {
+        const service = new google.maps.places.PlacesService(map);
+        service.getDetails({ placeId: placeId, fields: ['name', 'geometry'] }, (place, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+            const loc = {
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+              name: place.name
+            };
+            // POI 클릭 시 해당 장소로 이동하고 스트리트뷰로 전환 (선택 사항: goStreetView = true)
+            moveTo(loc, loc.name, true);
+          }
+        });
+      }
+      return;
+    }
+
+    // 2. 일반 지점 클릭 처리
     if (!e.detail.latLng) return;
     const latLng = e.detail.latLng;
     const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
