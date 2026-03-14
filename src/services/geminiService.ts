@@ -75,7 +75,7 @@ export async function chatWithLuna(
     text = text.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '');
     text = text.replace(/\{[\s\S]*?"action_input"[\s\S]*?\}/g, '');
     text = text.replace(/\{[\s\S]*?"function_calls"[\s\S]*?\}/g, '');
-    text = text.trim() || "지도에 핀을 꽂아드렸어요!";
+    text = text.trim() || "I've pinned the place for you!";
 
     const toolCalls = parts.filter(p => p.functionCall).map(p => ({
       name: p.functionCall!.name,
@@ -84,7 +84,11 @@ export async function chatWithLuna(
 
     const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
 
-    return { text, groundingMetadata, toolCalls, audioData: undefined };
+    // [음성 고도화] 비-라이브 모드에서도 캐릭터가 동물일 경우 아동 피치 적용
+    const isAnimal = persona.toLowerCase().includes('animal') || persona.toLowerCase().includes('아이');
+    const audioData = await speakWithLuna(text, isAnimal);
+
+    return { text, groundingMetadata, toolCalls, audioData };
   } catch (error: any) {
     console.error("Error chatting with Luna (Full Details):", error);
     if (error.response) console.error("API Response Error:", error.response.data || error.response);
@@ -98,18 +102,23 @@ export async function chatWithLuna(
   }
 }
 
-export async function speakWithLuna(text: string): Promise<string | undefined> {
+export async function speakWithLuna(text: string, isChild: boolean = false): Promise<string | undefined> {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const ai = new GoogleGenAI({ apiKey });
   try {
+    // [아동 보이스 고도화] 피치를 높이고 속도를 조절하여 성인이 아닌 '진짜 아이' 소리를 유도합니다.
+    const pitch = isChild ? "+12%" : "0%";
+    const rate = isChild ? "1.1" : "1.0";
+    const ssmlText = `<speak><prosody pitch="${pitch}" rate="${rate}">${text}</prosody></speak>`;
+
     const response = await ai.models.generateContent({
       model: "models/gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say warmly and affectionately: ${text}` }] }],
+      contents: [{ parts: [{ text: ssmlText }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: PREFERRED_VOICE_NAME }, // Use centralized voice Luna
+            prebuiltVoiceConfig: { voiceName: PREFERRED_VOICE_NAME }, 
           },
         },
       },

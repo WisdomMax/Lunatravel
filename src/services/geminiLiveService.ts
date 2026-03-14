@@ -31,6 +31,7 @@ export class GeminiLiveService {
     private onInterrupted: () => void;
     private isSetupFinished = false;
     private systemInstruction: string;
+    private voiceName: string;
 
     constructor(
         apiKey: string,
@@ -38,7 +39,8 @@ export class GeminiLiveService {
         onConnect: () => void,
         onDisconnect: () => void,
         onInterrupted: () => void,
-        systemInstruction: string = SYSTEM_INSTRUCTION
+        systemInstruction: string = SYSTEM_INSTRUCTION,
+        voiceName: string = 'Aoede'
     ) {
         this.apiKey = apiKey;
         this.onMessage = onMessage;
@@ -46,6 +48,7 @@ export class GeminiLiveService {
         this.onDisconnect = onDisconnect;
         this.onInterrupted = onInterrupted;
         this.systemInstruction = systemInstruction;
+        this.voiceName = voiceName;
     }
 
     public connect() {
@@ -95,32 +98,32 @@ export class GeminiLiveService {
             setup: {
                 model: "models/gemini-2.5-flash-native-audio-latest",
                 generation_config: {
-                    response_modalities: ["audio"], // Array formats are standard in some versions
+                    response_modalities: ["audio"],
                     speech_config: {
                         voice_config: {
                             prebuilt_voice_config: {
-                                voice_name: "Callirrhoe"
+                                voice_name: this.voiceName
                             }
                         }
                     }
                 },
                 system_instruction: {
                     parts: [{
-                        text: this.systemInstruction
+                        text: this.systemInstruction + "\n\n[LIVE MODE MANDATORY]: You are speaking via high-quality native audio. To recommend a place, call 'show_place_on_map'. If asked for details, use Google Search freely. NEVER read technical markers [[PLACE:...]] or URLs aloud. Speak naturally and act as a real travel companion."
                     }]
                 },
                 tools: [
+                    { googleSearch: {} },
                     {
                         function_declarations: [
                             {
                                 name: "show_place_on_map",
-                                description: "채팅창에 특정 장소로 이동할 수 있는 클릭 가능한 링크 버튼을 생성합니다. 직접 지도를 이동시키지 않습니다.",
+                                description: "Generates a clickable link button in the chat to move to a specific place. Does not move the map directly.",
                                 parameters: {
                                     type: "object",
                                     properties: {
-                                        name: { type: "string", description: "장소 또는 지역의 이름 (예: '부산', '도쿄 타워', '제주도 맛집')" },
-                                        address: { type: "string", description: "주소 또는 도시/국가 (예: 'Busan, South Korea', 'Tokyo, Japan', 'South Korea')" },
-                                        category: { type: "string", description: "장소의 종류. 'restaurant', 'attraction', 'other' 중 하나만 입력" }
+                                        name: { type: "string", description: "Name of the specific place (e.g., 'Gyeongbokgung Palace', 'MoMA'). Do NOT use full addresses here unless it's a specific street name the user wants to see." },
+                                        category: { type: "string", description: "Type of place. Use one of: 'restaurant', 'attraction', 'other'" }
                                     },
                                     required: ["name"]
                                 }

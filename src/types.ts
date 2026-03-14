@@ -42,6 +42,15 @@ export interface TravelState {
   lunaPhoto: string;
   lunaSelection: string;
   isLiveMode: boolean;
+  isBgmPlaying: boolean;
+  bgmVolume: number;
+  currentBgmIndex: number;
+  bgmPlaylist: Array<{ name: string, url: string }>;
+  bgmMode: 'loop' | 'playlist';
+  chatHistories: Record<string, Message[]>;
+  photoHistories: Record<string, TravelPhoto[]>;
+  lunaPhotos: Record<string, string>;
+  customType: 'female' | 'male' | 'animal';
 }
 
 export interface Place {

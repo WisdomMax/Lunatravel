@@ -6,24 +6,29 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map, Marker, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useTravel } from '../context/TravelContext';
-import { Search, MapPin, Loader2, Navigation, Utensils, Camera, ExternalLink, ChevronLeft, Map as MapIcon, Heart } from 'lucide-react';
+import { Search, MapPin, Loader2, Navigation, Utensils, Camera, ExternalLink, ChevronLeft, Map as MapIcon, Heart, Wand2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_ZOOM } from '../constants';
+import BgmControl from './BgmControl';
 
 export default function TravelMap() {
-  const { state, setViewMode, takeTravelPhoto, moveTo, addBookmark } = useTravel();
+  const { state, setViewMode, takeTravelPhoto, moveTo, addBookmark, setBgmMode } = useTravel();
   const [mapError, setMapError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showPromptInput, setShowPromptInput] = useState(false);
   const map = useMap();
 
   useEffect(() => {
     (window as any).gm_authFailure = () => {
       setMapError("Google Maps API error. Please check your key.");
     };
+    // 여행 페이지 진입 시 이전 설정 유지
+    
     return () => {
       (window as any).gm_authFailure = undefined;
     };
-  }, []);
+  }, [setBgmMode]);
 
   // ── Search Handler ──────────────────────────────────────────────
   const handleSearch = useCallback(() => {
@@ -238,34 +243,74 @@ export default function TravelMap() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            className="absolute top-20 right-6 z-50 pointer-events-auto"
+            className="absolute top-20 right-6 z-50 flex flex-col items-end gap-3 pointer-events-auto"
           >
-            <button
-              disabled={state.isGeneratingPhoto}
-              onClick={() => {
-                if (!map) return;
-                const sv = map.getStreetView();
-                const pov = sv.getPov();
-                const pos = sv.getPosition();
-                if (!pos) return;
-
-                takeTravelPhoto(
-                  { lat: pos.lat(), lng: pos.lng(), name: state.currentLocation.name },
-                  pov.heading,
-                  pov.pitch,
-                  sv.getZoom() || 1
-                );
-              }}
-              className={`bg-gradient-to-r from-pink-600 to-purple-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all active:scale-95 ${state.isGeneratingPhoto ? 'opacity-50 cursor-not-allowed scale-95' : 'hover:scale-105'
-                }`}
-            >
-              {state.isGeneratingPhoto ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <Camera className="w-6 h-6" />
+            {/* Optional Custom Prompt Input */}
+            <AnimatePresence>
+              {showPromptInput && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                  className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/50 w-64 mb-1 origin-bottom-right"
+                >
+                  <label className="text-[11px] font-black text-slate-500 mb-1.5 block uppercase tracking-wider pl-1">
+                    Special Request (Optional)
+                  </label>
+                  <textarea
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="e.g., wearing Hanbok, doing a peace sign..."
+                    className="w-full h-16 text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200 transition-all resize-none shadow-inner"
+                  />
+                </motion.div>
               )}
-              {state.isGeneratingPhoto ? '사진 보정 중...' : '같이 사진 찍기'}
-            </button>
+            </AnimatePresence>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowPromptInput(!showPromptInput)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 border ${
+                  showPromptInput 
+                    ? 'bg-pink-500 text-white border-pink-600' 
+                    : 'bg-white/80 backdrop-blur-xl text-slate-500 border-white/40 hover:bg-white hover:text-pink-500'
+                }`}
+                title="Add custom prompt"
+              >
+                <Wand2 className="w-5 h-5" />
+              </button>
+
+              <button
+                disabled={state.isGeneratingPhoto}
+                onClick={() => {
+                  if (!map) return;
+                  const sv = map.getStreetView();
+                  const pov = sv.getPov();
+                  const pos = sv.getPosition();
+                  if (!pos) return;
+
+                  takeTravelPhoto(
+                    { lat: pos.lat(), lng: pos.lng(), name: state.currentLocation.name },
+                    pov.heading,
+                    pov.pitch,
+                    sv.getZoom() || 1,
+                    customPrompt
+                  );
+                  // 촬영 후 입력창 숨기기 및 초기화 (옵션)
+                  setShowPromptInput(false);
+                  setCustomPrompt('');
+                }}
+                className={`bg-white/80 backdrop-blur-xl text-slate-900 border border-white/40 px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 font-sans font-bold text-sm transition-all active:scale-95 ${state.isGeneratingPhoto ? 'opacity-50 cursor-not-allowed scale-95' : 'hover:scale-105 hover:bg-white'
+                  }`}
+              >
+                {state.isGeneratingPhoto ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-pink-500" />
+                ) : (
+                  <Camera className="w-6 h-6 text-pink-500" />
+                )}
+                {state.isGeneratingPhoto ? 'Processing Memory...' : 'Capture Memory with Luna'}
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -279,8 +324,8 @@ export default function TravelMap() {
             exit={{ opacity: 0, x: -20 }}
             className="absolute top-20 left-6 z-10 flex flex-col gap-2 max-w-[250px]"
           >
-            <div className="bg-white/80 backdrop-blur-md p-2 rounded-xl border border-white/20 shadow-lg mb-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Luna's Pick</p>
+            <div className="bg-white/40 backdrop-blur-xl p-3 rounded-2xl border border-white/40 shadow-xl mb-1">
+              <p className="text-[10px] font-serif italic text-pink-700 uppercase tracking-[0.2em] px-2 text-center">{state.lunaName}'s Selections</p>
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto max-h-[300px] pr-2 scrollbar-hide">
               {state.nearbyPlaces.map((place) => (
@@ -318,8 +363,8 @@ export default function TravelMap() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
-              placeholder="어디로 갈까요? (Enter 또는 검색 버튼)"
-              className="w-full bg-white shadow-2xl rounded-2xl py-4 pl-12 pr-4 text-sm border-none focus:ring-2 focus:ring-pink-500/20 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+              placeholder="Explore the world together..."
+              className="w-full bg-white/70 backdrop-blur-2xl shadow-2xl rounded-full py-5 pl-14 pr-6 text-base border border-white/40 focus:ring-4 focus:ring-pink-500/10 transition-all font-display font-medium text-slate-900 placeholder:text-slate-400"
             />
           </div>
           <button
@@ -351,7 +396,7 @@ export default function TravelMap() {
               <button
                 onClick={() => addBookmark(state.currentLocation)}
                 className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
-                title="장소 저장하기"
+                title="Save Place"
               >
                 <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === state.currentLocation.name) ? 'fill-pink-500' : ''}`} />
               </button>
@@ -377,7 +422,7 @@ export default function TravelMap() {
               <button
                 onClick={() => addBookmark(state.currentLocation)}
                 className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
-                title="장소 저장하기"
+                title="Save Place"
               >
                 <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === state.currentLocation.name) ? 'fill-pink-500' : ''}`} />
               </button>
@@ -403,6 +448,7 @@ export default function TravelMap() {
           </button>
         </div>
       )}
+
     </div>
   );
 }

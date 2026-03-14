@@ -10,10 +10,14 @@ RUN npm install
 
 COPY . .
 
-# Vite 빌드 (SPA인 경우)
+# Vite 빌드 (SPA 프론트엔드 빌드)
 RUN npm run build
 
-# Port 8080은 Cloud Run의 기본값
+# 포트 설정
+ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "dist/server.js"]
+# tsx를 사용하여 서버 실행 (dist/server.js가 없는 문제 해결)
+# production 모드로 실행하여 dist/ 폴더의 정적 파일을 서빙하도록 함
+ENV NODE_ENV=production
+CMD ["npx", "tsx", "server.ts"]
