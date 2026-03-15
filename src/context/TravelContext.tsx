@@ -144,6 +144,21 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     });
   }, [streamer]);
 
+  const showModal = useCallback((options: { title: string, message: string, type?: 'alert' | 'confirm', onConfirm?: () => void, onCancel?: () => void }) => {
+    setModal({
+      isOpen: true,
+      title: options.title,
+      message: options.message,
+      type: options.type || 'alert',
+      onConfirm: options.onConfirm,
+      onCancel: options.onCancel
+    });
+  }, []);
+
+  const hideModal = useCallback(() => {
+    setModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
   useEffect(() => {
     const syncWithServer = async () => {
       try {
@@ -198,21 +213,6 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     };
     syncWithServer();
   }, [showModal]);
-
-  const showModal = useCallback((options: { title: string, message: string, type?: 'alert' | 'confirm', onConfirm?: () => void, onCancel?: () => void }) => {
-    setModal({
-      isOpen: true,
-      title: options.title,
-      message: options.message,
-      type: options.type || 'alert',
-      onConfirm: options.onConfirm,
-      onCancel: options.onCancel
-    });
-  }, []);
-
-  const hideModal = useCallback(() => {
-    setModal(prev => ({ ...prev, isOpen: false }));
-  }, []);
 
   const getDynamicInstruction = useCallback(() => {
     const personaKey = state.lunaSelection;
@@ -489,10 +489,10 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       console.error('[Capture] Generation error:', error);
       setState(prev => ({ ...prev, isGeneratingPhoto: false }));
       
-      // ✅ 사용자 친화적 에러 모달 복구
+      // ✅ 사용자 친화적 에러 모달 복구 (Memory -> Photo 표현 개선)
       showModal({
         title: "Photo Generation Failed",
-        message: `Oops! Luna couldn't capture the memory right now. ${error.message || 'Please try again in a moment.'}`,
+        message: `Oops! Luna couldn't create the travel photo right now. ${error.message || 'Please try again in a moment.'}`,
         type: "alert"
       });
     }
