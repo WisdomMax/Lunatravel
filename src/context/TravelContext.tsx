@@ -284,18 +284,18 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       const { name, address, category } = toolCall.args;
       const placeId = `live-tool-${Date.now()}`;
       
-      let isActuallyNew = false;
       setState(prev => {
-        const isDuplicate = prev.nearbyPlaces.some(p => p.name === name);
-        if (isDuplicate) return prev;
+        const alreadyExists = prev.nearbyPlaces.some(p => p.name === name);
+        let newNearbyPlaces = prev.nearbyPlaces;
         
-        isActuallyNew = true;
-        const newNearbyPlaces = [...prev.nearbyPlaces, {
-          id: placeId,
-          name,
-          location: prev.currentLocation, 
-          type: category || (name.toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction')
-        }];
+        if (!alreadyExists) {
+          newNearbyPlaces = [...prev.nearbyPlaces, {
+            id: placeId,
+            name,
+            location: prev.currentLocation, 
+            type: category || (name.toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction')
+          }];
+        }
 
         const newHistory = [...prev.history];
         if (newHistory.length > 0) {
@@ -311,8 +311,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
         return { ...prev, history: newHistory, nearbyPlaces: newNearbyPlaces };
       });
 
-      // 새로운 장소일 때만 지오코딩 및 지도 이동 수행
-      if (isActuallyNew && typeof google !== 'undefined' && google.maps?.Geocoder) {
+      // 중복 여부와 상관없이 지오코딩 및 지도 이동 수행 (사용자가 가고 싶어할 수 있음)
+      if (typeof google !== 'undefined' && google.maps?.Geocoder) {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ address: address || name, location: locationRef.current }, (results, status) => {
           if (status === 'OK' && results?.[0]) {
@@ -385,10 +385,11 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
       const locationContext = `[MANDATORY CURRENT MAP CENTER]: ${state.currentLocation.name || 'Seoul'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
       const liveSystemInstruction = `${getDynamicInstruction()}\n\n${locationContext}\n\n[LIVE MODE MANDATORY]: You are speaking via high-quality native audio. 
+- You MUST actively suggest interesting nearby places or move the map as requested.
 - To recommend a place or move the map, you MUST call 'show_place_on_map' AND include the tag [[PLACE: Name]] in your text response.
 - CRITICAL: Never pronounce the brackets or the technical tag [[PLACE:...]] aloud. Just speak the name naturally in your sentence.
-- Example: "How about visiting Dongbaekseom Island? [[PLACE: Dongbaekseom Island]]" (Speak ONLY the sentence, NOT the tag).
-- Speak naturally as a friend.`;
+- Example: "How about visiting Dongbaekseom Island? I've marked it for you. [[PLACE: Dongbaekseom Island]]" (Speak ONLY the sentence, NOT the tag).
+- Speak naturally as a friend. Be proactive in guiding the user.`;
 
       const service = new GeminiLiveService(
         apiKey,
