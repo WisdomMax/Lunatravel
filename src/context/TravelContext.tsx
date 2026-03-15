@@ -474,7 +474,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) throw new Error('Generation failed');
       const { url: resultUrl } = await response.json();
-      const newPhoto = { id: Date.now().toString(), url: resultUrl, locationName: location.name || '여행지', timestamp: Date.now() };
+      const newPhoto = { id: Date.now().toString(), url: resultUrl, locationName: location.name || 'Destination', timestamp: Date.now() };
 
       setState(prev => {
         const storageKey = prev.lunaSelection === 'custom' ? 'custom' : prev.lunaSelection;

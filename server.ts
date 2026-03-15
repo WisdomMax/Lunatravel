@@ -579,8 +579,9 @@ ${customPrompt && customPrompt.trim().length > 0 ? `**SPECIAL USER REQUEST (HIGH
 
         res.json({ url: newPhoto.url });
       } else {
-        console.warn("[AI-Photo] No image part in response, checking text response:", response.text);
-        res.status(500).json({ error: "No image generated", message: response.text });
+        console.warn("[AI-Photo] No image part in response. Full response candidates:", JSON.stringify(response.candidates, null, 2));
+        const textContent = response.candidates?.[0]?.content?.parts?.find((p: any) => p.text)?.text || "No text explanation provided by AI.";
+        res.status(500).json({ error: "No image generated", message: textContent });
       }
     } catch (e: any) {
       console.error("[AI-Photo] Failed:", e);
@@ -730,7 +731,7 @@ Output: Return ONLY the final detailed system instruction text in English. Make 
         contents: [{ role: 'user', parts: [{ text: `Expand this brief description into a professional AI persona: ${prompt}` }] }]
       });
 
-      const persona = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "보강된 대화 가이드를 생성하지 못했습니다.";
+      const persona = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Failed to generate refined persona guidance.";
       
       console.log(`[Persona-Refine] Refined from "${prompt}" to detailed persona.`);
       res.json({ persona });
