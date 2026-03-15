@@ -24,6 +24,7 @@ export default function TravelMap() {
     (window as any).gm_authFailure = () => {
       setMapError("Google Maps API error. Please check your key.");
     };
+    // 여행 페이지 진입 시 이전 설정 유지
     
     return () => {
       (window as any).gm_authFailure = undefined;
@@ -58,8 +59,10 @@ export default function TravelMap() {
   useEffect(() => {
     if (!map) return;
 
+    // Handle viewMode and StreetView
     const streetView = map.getStreetView();
 
+    // Configure Street View options to hide all default Google UI
     streetView.setOptions({
       addressControl: false,
       enableCloseButton: false,
@@ -85,7 +88,9 @@ export default function TravelMap() {
       }
     });
 
+    // StreetView 싱크 로직 최적화: 위치 변경 시마다 리스너를 재설정하지 않도록 함
     const positionListener = google.maps.event.addListener(streetView, 'position_changed', () => {
+      // 쓰로틀링 효과를 위해 state.viewMode가 정확히 일치할 때만 처리
       if (state.viewMode === 'streetview' && streetView.getVisible()) {
         const pos = streetView.getPosition();
         if (pos) {
@@ -94,6 +99,7 @@ export default function TravelMap() {
             Math.pow(newLoc.lat - state.currentLocation.lat, 2) +
             Math.pow(newLoc.lng - state.currentLocation.lng, 2)
           );
+          // 20m 이상 이동했을 때만 업데이트하여 API 호출 빈도 감소
           if (dist > 0.0002) {
             moveTo(newLoc, state.currentLocation.name, false);
           }
@@ -105,13 +111,14 @@ export default function TravelMap() {
       google.maps.event.removeListener(visibilityListener);
       google.maps.event.removeListener(positionListener);
     };
-  }, [map, state.viewMode, setViewMode, moveTo]);
+  }, [map, state.viewMode, setViewMode, moveTo]); // currentLocation 의존성 제거
 
   useEffect(() => {
     if (map && state.currentLocation && state.viewMode === 'map') {
       map.panTo(state.currentLocation);
     }
 
+    // Sync external viewMode changes back to the map's streetview
     if (map) {
       const streetView = map.getStreetView();
       if (state.viewMode === 'streetview' && !streetView.getVisible()) {
@@ -128,6 +135,7 @@ export default function TravelMap() {
       const placeId = e.detail.placeId;
       console.log('[Map] POI Clicked:', placeId);
       
+      // POI 기본 정보창 방지
       if (e.stop) e.stop();
 
       if (typeof google !== 'undefined' && google.maps?.places && map) {
@@ -137,24 +145,30 @@ export default function TravelMap() {
           fields: ['name', 'geometry', 'formatted_address', 'photos', 'rating', 'user_ratings_total', 'types'] 
         }, (place, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+            console.log('[Map] Place Details Success:', place.name);
             const loc = {
               lat: place.geometry.location.lat(),
               lng: place.geometry.location.lng(),
               name: place.name || 'Selected Place'
             };
             
+            // 상세 정보 창을 위한 상태 업데이트
             setSelectedPlace({
               ...place,
               location: loc
             });
 
+            // 지도를 살짝 비켜서 장소로 이동 (오버레이 가림 방지)
             moveTo(loc, loc.name, false);
+          } else {
+            console.error('[Map] Place Details Failed:', status);
           }
         });
       }
       return;
     }
 
+    // 2. 일반 지점 클릭 처리
     if (!e.detail.latLng) return;
     const latLng = e.detail.latLng;
     const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
@@ -204,17 +218,7 @@ export default function TravelMap() {
             <AdvancedMarker
               key={place.id}
               position={place.location}
-              onClick={() => {
-                moveTo(place.location, place.name, false);
-                setSelectedPlace({
-                  name: place.name,
-                  location: place.location,
-                  rating: place.rating,
-                  photos: place.photos,
-                  formatted_address: place.address || '',
-                  types: [place.type === 'restaurant' ? 'restaurant' : 'point_of_interest']
-                } as any);
-              }}
+              onClick={() => moveTo(place.location, place.name, false)}
             >
               <div className="group relative">
                 <Pin
@@ -235,6 +239,16 @@ export default function TravelMap() {
                         <span className="text-xs text-slate-500">{place.rating}</span>
                       </div>
                     )}
+                    {place.url && (
+                      <a
+                        href={place.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 flex items-center gap-1 text-[10px] text-blue-600 hover:underline pointer-events-auto"
+                      >
+                        View on Maps <ExternalLink className="w-2 h-2" />
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
@@ -243,6 +257,7 @@ export default function TravelMap() {
         </Map>
       </div>
 
+      {/* Back to Map Button (Only visible when in Street View) */}
       <AnimatePresence>
         {state.viewMode === 'streetview' && (
           <motion.div
@@ -270,6 +285,7 @@ export default function TravelMap() {
             exit={{ opacity: 0, scale: 0.8 }}
             className="absolute top-20 right-6 z-50 flex flex-col items-end gap-3 pointer-events-auto"
           >
+            {/* Optional Custom Prompt Input */}
             <AnimatePresence>
               {showPromptInput && (
                 <motion.div
@@ -320,6 +336,7 @@ export default function TravelMap() {
                     sv.getZoom() || 1,
                     customPrompt
                   );
+                  // 촬영 후 입력창 숨기기 및 초기화 (옵션)
                   setShowPromptInput(false);
                   setCustomPrompt('');
                 }}
@@ -338,6 +355,7 @@ export default function TravelMap() {
         )}
       </AnimatePresence>
 
+      {/* Recommended Places Quick Actions (Top Left) */}
       <AnimatePresence>
         {state.viewMode === 'map' && state.nearbyPlaces.length > 0 && (
           <motion.div
@@ -353,17 +371,7 @@ export default function TravelMap() {
               {state.nearbyPlaces.map((place) => (
                 <button
                   key={place.id}
-                  onClick={() => {
-                    moveTo(place.location, place.name, false);
-                    setSelectedPlace({
-                      name: place.name,
-                      location: place.location,
-                      rating: place.rating,
-                      photos: place.photos,
-                      formatted_address: place.address || '',
-                      types: [place.type === 'restaurant' ? 'restaurant' : 'point_of_interest']
-                    } as any);
-                  }}
+                  onClick={() => moveTo(place.location, place.name, false)}
                   className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-md border border-white/20 flex items-center gap-3 text-left hover:bg-white transition-all active:scale-[0.98] group"
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${place.type === 'restaurant' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
@@ -383,6 +391,7 @@ export default function TravelMap() {
         )}
       </AnimatePresence>
 
+      {/* Map Search Bar - Top Center */}
       <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-full max-w-sm px-4">
         <div className="relative flex gap-2">
           <div className="relative flex-1 group">
@@ -407,8 +416,9 @@ export default function TravelMap() {
         </div>
       </div>
 
+      {/* Floating Info Card - 지도 모드에서만 보임 */}
       <AnimatePresence>
-        {(selectedPlace?.name || state.currentLocation.name) && state.viewMode === 'map' && (
+        {state.currentLocation.name && state.viewMode === 'map' && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -421,20 +431,21 @@ export default function TravelMap() {
               </div>
               <div className="min-w-0 pr-2">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pin</p>
-                <p className="text-xs font-bold text-slate-900 truncate">{selectedPlace?.name || state.currentLocation.name}</p>
+                <p className="text-xs font-bold text-slate-900 truncate">{state.currentLocation.name}</p>
               </div>
               <button
-                onClick={() => addBookmark(selectedPlace?.location || state.currentLocation)}
+                onClick={() => addBookmark(state.currentLocation)}
                 className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
                 title="Save Place"
               >
-                <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === (selectedPlace?.name || state.currentLocation.name)) ? 'fill-pink-500' : ''}`} />
+                <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === state.currentLocation.name) ? 'fill-pink-500' : ''}`} />
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* 스트리트 뷰 주소 배너 - 주소만 깔끔하게 표시 */}
       <AnimatePresence>
         {state.viewMode === 'streetview' && state.currentLocation.name && (
           <motion.div
@@ -460,6 +471,7 @@ export default function TravelMap() {
         )}
       </AnimatePresence>
 
+      {/* Controls Overlay (Only in Map mode) */}
       {state.viewMode === 'map' && (
         <div className="absolute bottom-10 left-6 flex flex-col gap-2 z-10">
           <button
@@ -477,6 +489,7 @@ export default function TravelMap() {
         </div>
       )}
 
+      {/* Place Detail Overlay (Like original Google Maps) */}
       <AnimatePresence>
         {selectedPlace && (
           <motion.div
@@ -485,10 +498,11 @@ export default function TravelMap() {
             exit={{ opacity: 0, x: 20 }}
             className="absolute top-24 right-6 z-50 w-[320px] bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col pointer-events-auto"
           >
+            {/* Photo Header */}
             <div className="relative h-48 bg-slate-100">
               {selectedPlace.photos && selectedPlace.photos.length > 0 ? (
                 <img 
-                  src={selectedPlace.photos[0].getUrl ? selectedPlace.photos[0].getUrl({ maxWidth: 400 }) : selectedPlace.photos[0]} 
+                  src={selectedPlace.photos[0].getUrl({ maxWidth: 400 })} 
                   alt={selectedPlace.name}
                   className="w-full h-full object-cover"
                 />
@@ -506,6 +520,7 @@ export default function TravelMap() {
               </button>
             </div>
 
+            {/* Content */}
             <div className="p-6">
               <div className="flex justify-between items-start gap-2 mb-2">
                 <h3 className="text-xl font-black text-slate-900 leading-tight">{selectedPlace.name}</h3>
@@ -523,9 +538,7 @@ export default function TravelMap() {
                     <span className="text-amber-500 text-sm font-black">★</span>
                     <span className="text-sm font-black text-amber-700">{selectedPlace.rating}</span>
                   </div>
-                  {selectedPlace.user_ratings_total && (
-                    <span className="text-xs text-slate-400 font-bold">({selectedPlace.user_ratings_total.toLocaleString()} reviews)</span>
-                  )}
+                  <span className="text-xs text-slate-400 font-bold">({selectedPlace.user_ratings_total?.toLocaleString()} reviews)</span>
                 </div>
               )}
 
@@ -549,6 +562,7 @@ export default function TravelMap() {
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }
