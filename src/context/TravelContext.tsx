@@ -188,11 +188,16 @@ export function TravelProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.warn("[TravelContext] Failed to load server settings");
+        console.warn("[TravelContext] Failed to load server settings:", err);
+        showModal({
+          title: "Error",
+          message: "Failed to load server settings. Please check your network connection or try again later.",
+          type: "alert"
+        });
       }
     };
     syncWithServer();
-  }, []);
+  }, [showModal]);
 
   const showModal = useCallback((options: { title: string, message: string, type?: 'alert' | 'confirm', onConfirm?: () => void, onCancel?: () => void }) => {
     setModal({
@@ -480,9 +485,16 @@ export function TravelProvider({ children }: { children: ReactNode }) {
           photoHistories: { ...prev.photoHistories, [storageKey]: [newPhoto, ...(prev.photoHistories[storageKey] || [])] }
         };
       });
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('[Capture] Generation error:', error);
       setState(prev => ({ ...prev, isGeneratingPhoto: false }));
+      
+      // ✅ 사용자 친화적 에러 모달 복구
+      showModal({
+        title: "Photo Generation Failed",
+        message: `Oops! Luna couldn't capture the memory right now. ${error.message || 'Please try again in a moment.'}`,
+        type: "alert"
+      });
     }
   }, [state.lunaSelection]);
 
