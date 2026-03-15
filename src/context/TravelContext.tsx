@@ -155,9 +155,11 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const hideModal = useCallback(() => {
-    setModal(prev => ({ ...prev, isOpen: false }));
-  }, []);
+  useEffect(() => {
+    streamer.setStatusCallback((isPlaying) => {
+      setState(prev => ({ ...prev, isSpeaking: isPlaying }));
+    });
+  }, [streamer]);
 
   useEffect(() => {
     const syncWithServer = async () => {
