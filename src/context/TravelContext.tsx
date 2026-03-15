@@ -117,6 +117,7 @@ export function TravelProvider({ children }: { children: ReactNode }) {
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveService, setLiveService] = useState<GeminiLiveService | null>(null);
   const locationRef = useRef(state.currentLocation);
+  const processedTagsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     locationRef.current = state.currentLocation;
@@ -278,9 +279,13 @@ export function TravelProvider({ children }: { children: ReactNode }) {
       const { name, address, category } = toolCall.args;
       const placeId = `live-tool-${Date.now()}`;
       
+      let isActuallyNew = false;
       setState(prev => {
         const isDuplicate = prev.nearbyPlaces.some(p => p.name === name);
-        const newNearbyPlaces = isDuplicate ? prev.nearbyPlaces : [...prev.nearbyPlaces, {
+        if (isDuplicate) return prev;
+        
+        isActuallyNew = true;
+        const newNearbyPlaces = [...prev.nearbyPlaces, {
           id: placeId,
           name,
           location: prev.currentLocation, 
@@ -301,7 +306,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
         return { ...prev, history: newHistory, nearbyPlaces: newNearbyPlaces };
       });
 
-      if (typeof google !== 'undefined' && google.maps?.Geocoder) {
+      // 새로운 장소일 때만 지오코딩 및 지도 이동 수행
+      if (isActuallyNew && typeof google !== 'undefined' && google.maps?.Geocoder) {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ address: address || name, location: locationRef.current }, (results, status) => {
           if (status === 'OK' && results?.[0]) {
@@ -372,11 +378,12 @@ export function TravelProvider({ children }: { children: ReactNode }) {
         else if (state.lunaSelection === 'luna-3') voiceName = 'Kore';
       }
 
-      const locationContext = `[MANDATORY CURRENT LOCATION]: ${state.currentLocation.name || 'Seoul'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
+      const locationContext = `[MANDATORY CURRENT MAP CENTER]: ${state.currentLocation.name || 'Seoul'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
       const liveSystemInstruction = `${getDynamicInstruction()}\n\n${locationContext}\n\n[LIVE MODE MANDATORY]: You are speaking via high-quality native audio. 
-- To recommend a place or move the map, you MUST call 'show_place_on_map' AND include the tag [[PLACE: Name]] at the END of your speech.
-- NEVER read technical markers [[PLACE:...]] aloud.
-- Speak naturally.`;
+- To recommend a place or move the map, you MUST call 'show_place_on_map' AND include the tag [[PLACE: Name]] in your text response.
+- CRITICAL: Never pronounce the brackets or the technical tag [[PLACE:...]] aloud. Just speak the name naturally in your sentence.
+- Example: "How about visiting Dongbaekseom Island? [[PLACE: Dongbaekseom Island]]" (Speak ONLY the sentence, NOT the tag).
+- Speak naturally as a friend.`;
 
       const service = new GeminiLiveService(
         apiKey,
@@ -393,19 +400,28 @@ export function TravelProvider({ children }: { children: ReactNode }) {
               const updatedHistory = [...history];
               
               let currentFullText = '';
+              let turnId = '';
               if (lastMsg && lastMsg.role === 'model' && lastMsg.id.startsWith('live-turn-')) {
+                turnId = lastMsg.id;
                 currentFullText = lastMsg.text + msg.text;
                 updatedHistory[updatedHistory.length - 1] = { ...lastMsg, text: currentFullText };
               } else {
+                turnId = `live-turn-${Date.now()}`;
                 currentFullText = msg.text;
-                updatedHistory.push({ id: `live-turn-${Date.now()}`, role: 'model', text: currentFullText, timestamp: Date.now() });
+                updatedHistory.push({ id: turnId, role: 'model', text: currentFullText, timestamp: Date.now() });
               }
 
-              // ✅ 누적 텍스트 기반 완벽한 태그 파싱 (분절 오류 해결)
-              const placeTags = currentFullText.matchAll(/\[\[PLACE:\s*(.*?)\s*\]\]/g);
-              for (const match of placeTags) {
-                if (match[1]) handleToolCall({ name: 'show_place_on_map', args: { name: match[1].trim() } });
-              }
+              // ✅ 누적 텍스트 기반 태그 파싱 + 중복 호출 방지
+              const placeTags = Array.from(currentFullText.matchAll(/\[\[PLACE:\s*(.*?)\s*\]\]/g));
+              placeTags.forEach(match => {
+                const placeName = match[1]?.trim();
+                const tagKey = `${turnId}-${placeName}`;
+                if (placeName && !processedTagsRef.current.has(tagKey)) {
+                  console.log('[LunaLive] New tag parsed from stream:', placeName);
+                  processedTagsRef.current.add(tagKey);
+                  handleToolCall({ name: 'show_place_on_map', args: { name: placeName } });
+                }
+              });
 
               return { ...prev, history: updatedHistory, isThinking: false };
             });
