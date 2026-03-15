@@ -51,6 +51,7 @@ export interface TravelState {
   photoHistories: Record<string, TravelPhoto[]>;
   lunaPhotos: Record<string, string>;
   customType: 'female' | 'male' | 'animal';
+  isInitialized: boolean;
 }
 
 export interface Place {

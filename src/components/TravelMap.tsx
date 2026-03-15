@@ -17,6 +17,7 @@ export default function TravelMap() {
   const [searchQuery, setSearchQuery] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [showPromptInput, setShowPromptInput] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const map = useMap();
 
   useEffect(() => {
@@ -130,25 +131,37 @@ export default function TravelMap() {
   }, [map, state.currentLocation, state.viewMode]);
 
   const handleMapClick = (e: any) => {
-    // 1. POI(Point of Interest) 클릭 여부 확인
     if (e.detail.placeId) {
       const placeId = e.detail.placeId;
       console.log('[Map] POI Clicked:', placeId);
       
       // POI 기본 정보창 방지
-      e.stop();
+      if (e.stop) e.stop();
 
       if (typeof google !== 'undefined' && google.maps?.places && map) {
         const service = new google.maps.places.PlacesService(map);
-        service.getDetails({ placeId: placeId, fields: ['name', 'geometry'] }, (place, status) => {
+        service.getDetails({ 
+          placeId: placeId, 
+          fields: ['name', 'geometry', 'formatted_address', 'photos', 'rating', 'user_ratings_total', 'types'] 
+        }, (place, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+            console.log('[Map] Place Details Success:', place.name);
             const loc = {
               lat: place.geometry.location.lat(),
               lng: place.geometry.location.lng(),
-              name: place.name
+              name: place.name || 'Selected Place'
             };
-            // POI 클릭 시 해당 장소로 이동하고 스트리트뷰로 전환 (선택 사항: goStreetView = true)
-            moveTo(loc, loc.name, true);
+            
+            // 상세 정보 창을 위한 상태 업데이트
+            setSelectedPlace({
+              ...place,
+              location: loc
+            });
+
+            // 지도를 살짝 비켜서 장소로 이동 (오버레이 가림 방지)
+            moveTo(loc, loc.name, false);
+          } else {
+            console.error('[Map] Place Details Failed:', status);
           }
         });
       }
@@ -186,6 +199,7 @@ export default function TravelMap() {
           streetViewControl={true}
           onClick={handleMapClick}
           mapId="DEMO_MAP_ID"
+          clickableIcons={true}
         >
           <AdvancedMarker position={state.currentLocation}>
             <div className="relative flex items-center justify-center">
@@ -474,6 +488,80 @@ export default function TravelMap() {
           </button>
         </div>
       )}
+
+      {/* Place Detail Overlay (Like original Google Maps) */}
+      <AnimatePresence>
+        {selectedPlace && (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="absolute top-24 right-6 z-50 w-[320px] bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col pointer-events-auto"
+          >
+            {/* Photo Header */}
+            <div className="relative h-48 bg-slate-100">
+              {selectedPlace.photos && selectedPlace.photos.length > 0 ? (
+                <img 
+                  src={selectedPlace.photos[0].getUrl({ maxWidth: 400 })} 
+                  alt={selectedPlace.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+                  <Camera className="w-8 h-8 opacity-20" />
+                  <p className="text-[10px] uppercase tracking-widest font-black">No Preview Memory</p>
+                </div>
+              )}
+              <button 
+                onClick={() => setSelectedPlace(null)}
+                className="absolute top-4 right-4 w-8 h-8 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all active:scale-90"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="flex justify-between items-start gap-2 mb-2">
+                <h3 className="text-xl font-black text-slate-900 leading-tight">{selectedPlace.name}</h3>
+                <button
+                  onClick={() => addBookmark(selectedPlace.location)}
+                  className="p-2 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
+                >
+                  <Heart className={`w-5 h-5 ${state.bookmarks.some(b => b.name === selectedPlace.name) ? 'fill-pink-500' : ''}`} />
+                </button>
+              </div>
+
+              {selectedPlace.rating && (
+                <div className="flex items-center gap-1.5 mb-4">
+                  <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg">
+                    <span className="text-amber-500 text-sm font-black">★</span>
+                    <span className="text-sm font-black text-amber-700">{selectedPlace.rating}</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-bold">({selectedPlace.user_ratings_total?.toLocaleString()} reviews)</span>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500 leading-relaxed mb-6 font-medium">
+                {selectedPlace.formatted_address}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    moveTo(selectedPlace.location, selectedPlace.name, true);
+                    setSelectedPlace(null);
+                  }}
+                  className="flex-1 bg-pink-600 hover:bg-pink-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-pink-200 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Explore Street View
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -69,6 +69,7 @@ const getInitialState = (): TravelState => {
     photoHistories: {},
     lunaPhotos: {},
     customType: (localStorage.getItem('custom_type') as any) || 'female',
+    isInitialized: false,
   };
 
   if (saved) {
@@ -102,6 +103,7 @@ const getInitialState = (): TravelState => {
         isLiveMode: false,
         isBgmPlaying: parsed.isBgmPlaying ?? true,
         bgmVolume: parsed.bgmVolume ?? 1.0,
+        isInitialized: false, // 로컬 스토리지에서 불러왔어도 서버 동기화는 필요하므로 일단 false
       };
     } catch (e) {
       console.error('Failed to load storage:', e);
@@ -137,6 +139,13 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     message: '',
     type: 'alert'
   });
+
+    // AudioStreamer 재생 상태와 UI 상태 동기화
+    useEffect(() => {
+        streamer.setStatusCallback((isPlaying) => {
+            setState(prev => ({ ...prev, isSpeaking: isPlaying }));
+        });
+    }, [streamer]);
 
   // 0. 서버 설정 동기화 (캐릭터별 격리 보장 버전)
   useEffect(() => {
@@ -182,7 +191,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
                 chatHistories: chatHistories,
                 photoHistories: photoHistories,
                 lunaPhotos: lunaPhotosMap,
-                bgmVolume: s.bgm_volume !== undefined ? s.bgm_volume : (s.bgmVolume !== undefined ? s.bgmVolume : prev.bgmVolume)
+                bgmVolume: s.bgm_volume !== undefined ? s.bgm_volume : (s.bgmVolume !== undefined ? s.bgmVolume : prev.bgmVolume),
+                isInitialized: true
               };
             });
           }
@@ -663,7 +673,11 @@ ${processedPersona}${styleNote}
       }
 
       const locationContext = `[MANDATORY CURRENT LOCATION]: ${state.currentLocation.name || 'Seoul'} (Lat: ${state.currentLocation.lat.toFixed(4)}, Lng: ${state.currentLocation.lng.toFixed(4)}).`;
-      const liveSystemInstruction = `${getDynamicInstruction()}\n\n${locationContext}\n\n[LIVE MODE MANDATORY]: You are speaking via high-quality native audio. To recommend a place, call 'show_place_on_map'. If asked for details, use Google Search freely. NEVER read technical markers [[PLACE:...]] or URLs aloud. Speak naturally and act as a real travel companion.${ageInstruction}`;
+      const liveSystemInstruction = `${getDynamicInstruction()}\n\n${locationContext}\n\n[LIVE MODE MANDATORY]: You are speaking via high-quality native audio. 
+- To recommend a place or move the map, you MUST call 'show_place_on_map' AND include the tag [[PLACE: Name]] in your speech/text.
+- If asked for details, use Google Search freely. 
+- NEVER read technical markers [[PLACE:...]] or URLs aloud. 
+- Speak naturally and act as a real travel companion.${ageInstruction}`;
 
       const service = new GeminiLiveService(
         apiKey,

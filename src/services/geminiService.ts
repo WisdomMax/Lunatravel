@@ -30,23 +30,7 @@ export async function chatWithLuna(
       config: {
         systemInstruction: { parts: [{ text: persona }] },
         tools: [
-          { googleSearch: {} },
-          {
-            functionDeclarations: [
-              {
-                name: "show_place_on_map",
-                description: "Show a specific place on the map for the user.",
-                parameters: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING, description: "The name of the place" },
-                    address: { type: Type.STRING, description: "The approximate address" }
-                  },
-                  required: ["name"]
-                }
-              }
-            ]
-          }
+          { googleSearch: {} }
         ],
       }
     });

@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useTravel } from '../context/TravelContext';
-import { MessageSquare, Send, MapPin, Loader2, VolumeX, Heart, Sparkles, Mic, MicOff, Phone, PhoneOff, Camera, MonitorUp, Navigation, Utensils, RotateCcw, ChevronRight, ArrowLeft, Trash2, X, ChevronLeft } from 'lucide-react';
+import { MessageSquare, Send, MapPin, Loader2, VolumeX, Heart, Sparkles, Mic, MicOff, Phone, PhoneOff, Camera, MonitorUp, Navigation, Utensils, RotateCcw, ChevronRight, ArrowLeft, Trash2, X, ChevronLeft, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BgmControl from './BgmControl';
 
@@ -110,7 +110,7 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
       // 2. Markdown 링크 확인 [text](url)
       const mdMatch = part.match(/\[(.*?)\]\((https?:\/\/.*?)\)/);
       if (mdMatch) {
-        const linkText = mdMatch[1].trim() || 'Info Link 🔗';
+        const linkText = mdMatch[1].trim() || 'Info Link';
         const linkUrl = mdMatch[2].trim();
         return (
           <a
@@ -118,29 +118,20 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
             href={linkUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2 py-1 my-1 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm mx-1 break-all underline decoration-blue-300 active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 my-1 bg-blue-50/50 text-blue-600 rounded-full font-bold text-[11px] hover:bg-blue-600 hover:text-white transition-all border border-blue-100 shadow-sm mx-1 active:scale-95 group"
           >
-            {linkText.includes('http') ? 'Info Link 🔗' : linkText}
+            <Sparkles className="w-3 h-3 group-hover:animate-pulse" />
+            {linkText.includes('http') ? 'View Source' : linkText}
           </a>
         );
       }
 
       // 3. 일반 URL 확인
       if (part.match(/https?:\/\/[^\s$.?#].[^\s]*/)) {
-        return (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2 py-1 my-1 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm mx-1 break-all underline decoration-blue-300 active:scale-95"
-          >
-            Info Link 🔗
-          </a>
-        );
+        return null; // 본문 내 일반 URL은 가독성을 위해 숨기고 하단 소스 섹션에서만 보여줌
       }
 
-      return <span key={i}>{part}</span>;
+      return <span key={i} className="leading-relaxed">{part}</span>;
     });
   };
 
@@ -418,6 +409,31 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
                         <div className={msg.role === 'model' ? 'font-gothic text-[15px]' : 'font-gothic'}>
                           {renderText(msg.text, isLargeList && msg.role === 'model')}
                         </div>
+
+                        {/* 외부 링크 소스 섹션 (모바일 앱처럼 깔끔하게 정리) */}
+                        {msg.role === 'model' && (msg.text.includes('http://') || msg.text.includes('https://')) && (
+                          <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-slate-50 italic">
+                            <p className="w-full text-[9px] font-black text-blue-400 uppercase tracking-widest pl-1 mb-1">Information Sources</p>
+                            {Array.from(msg.text.matchAll(/\[(.*?)\]\((https?:\/\/.*?)\)|(https?:\/\/[^\s$.?#].[^\s]*)/g)).map((match, idx) => {
+                              const url = match[2] || match[3];
+                              const title = match[1] || 'Info Source';
+                              // 중복 제거 및 깔끔한 제목 처리
+                              return (
+                                <a
+                                  key={`source-${msg.id}-${idx}`}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-3 py-2 bg-white text-slate-700 rounded-xl text-[10px] font-black border border-slate-100 hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-all shadow-sm active:scale-95"
+                                >
+                                  <ExternalLink className="w-3 h-3 text-blue-400" />
+                                  {title.length > 25 ? title.substring(0, 25) + '...' : title}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         <p className={`text-[9px] mt-2 font-bold tracking-tighter opacity-40 ${msg.role === 'user' ? 'text-white' : 'text-slate-400'}`}>
                           {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>

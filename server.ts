@@ -178,13 +178,24 @@ async function saveDB(updates: any) {
   Object.keys(updates).forEach(key => {
     // 보호 로직: 히스토리나 사진첩이 이미 존재하는데 빈 값이 들어오면 무시 (유실 방지)
     const val = updates[key];
-    if (key === 'chatHistories' || key === 'chat_histories' || key === 'photoHistories' || key === 'photo_histories') {
-      const existing = newData.chat_histories || newData.photo_histories || {};
-      // 빈 객체이거나 모든 키의 값이 빈 배열인 경우 무시 (클라이언트 초기화 방어)
-      if (val && typeof val === 'object' && Object.keys(val).length > 0) {
-        const targetKey = (key === 'chatHistories' || key === 'chat_histories') ? 'chat_histories' : 'photo_histories';
-        newData[targetKey] = { ...(newData[targetKey] || {}), ...val };
+    const targetKey = (key === 'chatHistories' || key === 'chat_histories') ? 'chat_histories' : 
+                      (key === 'photoHistories' || key === 'photo_histories') ? 'photo_histories' : null;
+
+    if (targetKey) {
+      // 1. 서버에 이미 데이터가 있는가?
+      const existingMap = newData[targetKey] || {};
+      
+      // 2. 새로 들어온 데이터가 유효한가? (객체이며, 최소 하나 이상의 키에 데이터가 있는가)
+      const hasContent = val && typeof val === 'object' && Object.keys(val).some(k => Array.isArray(val[k]) && val[k].length > 0);
+      
+      // 3. 서버엔 데이터가 있는데, 들어온 건 비어있다면 -> 덮어쓰기 거부 (유실 방지!)
+      if (Object.keys(existingMap).length > 0 && !hasContent) {
+        console.warn(`[SaveDB] Blocked wiping ${targetKey} with empty data.`);
+        return;
       }
+      
+      // 4. 안전하다면 병합 또는 업데이트
+      newData[targetKey] = { ...existingMap, ...val };
       return;
     }
     
@@ -261,7 +272,7 @@ async function startServer() {
       ws.isAlive = false;
       ws.ping();
     });
-  }, 30000); // 30초마다 핑
+  }, 15000); // 15초로 단축 (Cloud Run 연결 유지 강화)
 
   wss.on("close", () => {
     clearInterval(interval);
@@ -301,7 +312,13 @@ async function startServer() {
       }
     });
 
-    geminiWs.on("message", (data) => {
+    const upstreamHeartbeat = setInterval(() => {
+      if (geminiWs.readyState === WebSocket.OPEN) {
+        geminiWs.ping();
+      }
+    }, 20000);
+
+    geminiWs.on("message", (data: any) => {
       const msg = data.toString();
       // Only log a snippet to avoid flooding
       if (msg.includes("error")) {
@@ -331,9 +348,10 @@ async function startServer() {
         }
         clientWs.close();
       }
+      clearInterval(upstreamHeartbeat);
     });
 
-    clientWs.on("message", (data) => {
+    clientWs.on("message", (data: any) => {
       let messageStr = data.toString();
       console.log("[Luna-Proxy] Client Message:", messageStr);
       // Forward everything faithfully to MultimodalLiveService
