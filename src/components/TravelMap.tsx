@@ -123,44 +123,50 @@ export default function TravelMap() {
     }
   }, [map, state.currentLocation, state.viewMode]);
 
-  const handleMapClick = (e: any) => {
-    if (e.detail.placeId) {
-      const placeId = e.detail.placeId;
-      console.log('[Map] POI Clicked:', placeId);
-      
-      if (e.stop) e.stop();
+  const handlePoiClick = useCallback((e: any) => {
+    if (!e.detail.placeId) return;
+    const placeId = e.detail.placeId;
+    console.log('[Map] POI Clicked:', placeId);
+    
+    if (e.stop) e.stop();
 
-      if (typeof google !== 'undefined' && google.maps?.places && map) {
-        const service = new google.maps.places.PlacesService(map);
-        service.getDetails({ 
-          placeId: placeId, 
-          fields: ['name', 'geometry', 'formatted_address', 'photos', 'rating', 'user_ratings_total', 'types'] 
-        }, (place, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-            const loc = {
-              lat: place.geometry.location.lat(),
-              lng: place.geometry.location.lng(),
-              name: place.name || 'Selected Place'
-            };
-            
-            setSelectedPlace({
-              ...place,
-              location: loc
-            });
+    if (typeof google !== 'undefined' && google.maps?.places && map) {
+      const service = new google.maps.places.PlacesService(map);
+      service.getDetails({ 
+        placeId: placeId, 
+        fields: ['name', 'geometry', 'formatted_address', 'photos', 'rating', 'user_ratings_total', 'types'] 
+      }, (place, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+          const loc = {
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+            name: place.name || 'Selected Place'
+          };
+          
+          setSelectedPlace({
+            ...place,
+            location: loc
+          });
 
-            moveTo(loc, loc.name, false);
-          }
-        });
-      }
-      return;
+          moveTo(loc, loc.name, false);
+        }
+      });
     }
+  }, [map, moveTo]);
+
+  const handleMapClick = useCallback((e: any) => {
+    // POI 클릭은 handlePoiClick에서 처리하므로 여기서는 무시
+    if (e.detail.placeId) return;
 
     if (!e.detail.latLng) return;
     const latLng = e.detail.latLng;
     const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
     const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+    
+    // 단순 지도 클릭 시 선택된 장소 해제
+    setSelectedPlace(null);
     moveTo({ lat, lng });
-  };
+  }, [moveTo]);
 
   if (mapError) {
     return (
@@ -184,6 +190,7 @@ export default function TravelMap() {
           disableDefaultUI={false}
           streetViewControl={true}
           onClick={handleMapClick}
+          onPoiClick={handlePoiClick}
           mapId="DEMO_MAP_ID"
           clickableIcons={true}
         >
@@ -204,7 +211,8 @@ export default function TravelMap() {
             <AdvancedMarker
               key={place.id}
               position={place.location}
-              onClick={() => {
+              onClick={(e: any) => {
+                if (e.stop) e.stop(); // 이벤트 전파 방지
                 moveTo(place.location, place.name, false);
                 setSelectedPlace({
                   name: place.name,
@@ -216,7 +224,7 @@ export default function TravelMap() {
                 } as any);
               }}
             >
-              <div className="group relative">
+              <div className="group relative cursor-pointer">
                 <Pin
                   background={place.type === 'restaurant' ? '#F59E0B' : '#3B82F6'}
                   borderColor={place.type === 'restaurant' ? '#92400E' : '#1E40AF'}
