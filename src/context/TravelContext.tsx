@@ -63,7 +63,12 @@ const getInitialState = (): TravelState => {
     isBgmPlaying: true,
     bgmVolume: 1.0,
     currentBgmIndex: 0,
-    bgmPlaylist: [],
+    bgmPlaylist: [
+      { name: 'Heartbeat', url: '/assets/bgm/Heartbeat.mp3' },
+      { name: 'Sad Story', url: '/assets/bgm/Sad_story.mp3' },
+      { name: 'Fly Away', url: '/assets/bgm/fly_away_far_away.mp3' },
+      { name: 'Promise', url: '/assets/bgm/promise.mp3' }
+    ],
     bgmMode: 'loop',
     chatHistories: {},
     photoHistories: {},
@@ -514,10 +519,59 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     }
   }, [state.lunaSelection]);
 
-  const value = { state, sendMessage, moveTo, setViewMode, playAudio, stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession, takeTravelPhoto,
-    deletePhoto: async () => {}, addBookmark: async () => {}, removeBookmark: async () => {}, sendLiveVideo: () => {}, toggleBgm: () => {},
-    setBgmVolume: () => {}, nextBgm: () => {}, prevBgm: () => {}, selectBgm: () => {}, setBgmMode: () => {}, showModal, hideModal, modal,
-    updateSettings: async (u: any) => { setState(prev => ({ ...prev, ...u })); }
+  const toggleBgm = useCallback(() => {
+    setState(prev => ({ ...prev, isBgmPlaying: !prev.isBgmPlaying }));
+  }, []);
+
+  const setBgmVolume = useCallback((volume: number) => {
+    setState(prev => ({ ...prev, bgmVolume: volume }));
+  }, []);
+
+  const nextBgm = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      currentBgmIndex: (prev.currentBgmIndex + 1) % prev.bgmPlaylist.length
+    }));
+  }, []);
+
+  const prevBgm = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      currentBgmIndex: (prev.currentBgmIndex - 1 + prev.bgmPlaylist.length) % prev.bgmPlaylist.length
+    }));
+  }, []);
+
+  const selectBgm = useCallback((index: number) => {
+    setState(prev => ({ ...prev, currentBgmIndex: index }));
+  }, []);
+
+  const setBgmMode = useCallback((mode: 'loop' | 'playlist') => {
+    setState(prev => ({ ...prev, bgmMode: mode }));
+  }, []);
+
+  const value = { 
+    state, sendMessage, moveTo, setViewMode, playAudio, stopAudio, isLiveMode, startLiveMode, stopLiveMode, resetSession, takeTravelPhoto,
+    deletePhoto: async (id: string) => {}, 
+    addBookmark: async (loc: any) => {}, 
+    removeBookmark: async (id: string) => {}, 
+    sendLiveVideo: (b: string) => {}, 
+    toggleBgm,
+    setBgmVolume, 
+    nextBgm, 
+    prevBgm, 
+    selectBgm, 
+    setBgmMode, 
+    showModal, 
+    hideModal, 
+    modal,
+    updateSettings: async (u: any) => { 
+      setState(prev => {
+        const newState = { ...prev, ...u };
+        // BGM 관련 설정이 업데이트되면 로컬 스토리지에 저장
+        localStorage.setItem('luna_travel_state', JSON.stringify(newState));
+        return newState;
+      }); 
+    }
   };
 
   return <TravelContext.Provider value={value as any}>{children}</TravelContext.Provider>;
