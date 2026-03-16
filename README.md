@@ -29,6 +29,27 @@ Our project deeply utilizes Google's latest tech stack:
 
 ---
 
+## 🔍 Technical Evidence: Key Files & Logic
+For the hackathon judges, here are the direct links to the core logic implementing Google's technologies:
+
+### 1. Gemini Multimodal Live API Implementation
+- **[geminiLiveService.ts](./src/services/geminiLiveService.ts)**: Core service for handling bidirectional WebSocket audio streaming and tool orchestration.
+- **[server.ts L300-L450](./server.ts)**: Node.js secure proxy with custom **Heartbeat logic** and API key management for Gemini Live.
+
+### 2. Intelligent Image Synthesis Pipeline
+- **[server.ts L510-L650](./server.ts)**: The primary pipeline for **Gemini 3.1 Flash** DSLR-quality photo synthesis, blending Street View backdrops and user portraits.
+- **[TravelContext.tsx (takeTravelPhoto)](./src/context/TravelContext.tsx)**: Logic for triggering photogenic moments and managing asset metadata.
+
+### 3. Real-time Map & Persona State Management
+- **[TravelContext.tsx](./src/context/TravelContext.tsx)**: A comprehensive state manager (1100+ lines) handling **Character Isolation** (Luna 1-3) and **Hybrid Persistence** (Local <-> Firestore).
+- **[StreetViewCanvas.tsx](./src/components/StreetViewCanvas.tsx)**: Deep integration of Google Maps SDK and Street View Static API for immersive visuals.
+
+### 4. Self-healing & Cloud Resilience
+- **[server.ts (Self-healing logic)](./server.ts)**: Automated routine to restore broken asset links from GCS upon server startup.
+- **[.gitignore](./.gitignore)**: Security reinforcement to ensure no API keys or local DBs are exposed.
+
+---
+
 ## 🧪 Validation & Reproduction
 ### 1. Build Check
 - `npm run build` generates the `dist` folder without errors (Vite v6 optimized).
