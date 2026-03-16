@@ -37,7 +37,7 @@ type AppView = 'setup' | 'app';
 
 function TravelApp({ apiKey, onBack }: { apiKey: string, onBack: () => void }) {
   return (
-    <APIProvider apiKey={apiKey}>
+    <APIProvider apiKey={apiKey} libraries={['places']}>
       <div className="flex h-screen w-screen bg-slate-50 overflow-hidden">
         {/* Sidebar */}
         <div className="w-[400px] h-full flex-shrink-0 z-20 shadow-2xl shadow-slate-300/50 bg-white">

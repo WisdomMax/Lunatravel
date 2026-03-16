@@ -331,8 +331,14 @@ export class GeminiLiveService {
 
     public sendInterrupt() {
         if (this.ws?.readyState !== WebSocket.OPEN) return;
-        // 클라이언트에서 턴을 강제로 완료하여 진행중인 모델 생성을 중단합니다.
-        // 일부 API 버전에서는 비어있는 turns가 필요할 수 있습니다.
+        /* 
+         * [안정성 조치] 
+         * 일부 Gemini API 서버 환경에서 빈 turns를 포함한 turn_complete 전송 시 
+         * 400 에러와 함께 연결이 예기치 않게 종료되는 현상이 발견되었습니다.
+         * 로컬 오디오 스트리밍 중단은 이미 AudioStreamer와 Context 레벨에서 
+         * 처리되고 있으므로, 연결 무결성을 위해 서버 전송은 비활성화합니다.
+         */
+        /*
         const message = {
             client_content: {
                 turns: [],
@@ -340,6 +346,8 @@ export class GeminiLiveService {
             }
         };
         this.sendJson(message);
+        */
+        console.log('[LunaLive] Interrupt triggered (Network send bypassed for stability)');
     }
 
     private sendJson(msg: any) {

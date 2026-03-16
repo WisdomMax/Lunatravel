@@ -62,4 +62,7 @@ export interface Place {
   description?: string;
   rating?: number;
   url?: string;
+  placeId?: string;
+  photos?: any[];
+  address?: string;
 }

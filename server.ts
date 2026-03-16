@@ -22,7 +22,8 @@ const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin (Firestore & Storage)
 const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID || "luna-travel-luna"; 
-const GCS_BUCKET_NAME = process.env.GCS_BUCKET || `${GCP_PROJECT_ID}.firebasestorage.app`;
+// [긴급 수정] 실제 존재하는 버킷 이름을 우선 사용하도록 환경 변수 체크 강화
+const GCS_BUCKET_NAME = process.env.GCS_BUCKET || "luna-travel-luna-source-bucket"; 
 
 try {
   admin.initializeApp({
@@ -53,7 +54,7 @@ async function saveImage(buffer: Buffer, fileName: string, contentType: string, 
         resumable: false // 작은 파일이므로 resumable 비활성화
       });
       
-      // [보완] 명시적으로 공개 권한 부여
+      // [보완] 명시적으로 공개 권한 부여 (버킷 정책이 Uniform이 아닐 경우 필수)
       try {
         await file.makePublic();
       } catch (e) {
@@ -64,7 +65,9 @@ async function saveImage(buffer: Buffer, fileName: string, contentType: string, 
       console.log(`[Cloud] Saved to GCS: ${publicUrl}`);
       return publicUrl;
     } catch (error) {
-      console.warn("[Cloud] GCS Upload failed, falling back to local FS:", error);
+      console.error("[Cloud] CRITICAL: GCS Upload failed.", error);
+      // 전문가 조언: Cloud Run에서는 로컬 저장이 의미가 없으므로 에러를 던져서 상위에서 처리하게 함
+      throw new Error(`GCS Upload Failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -167,7 +170,18 @@ async function getDB() {
     Object.keys(data.photo_histories).forEach(k => {
       data.photo_histories[k].sort((a: any, b: any) => b.timestamp - a.timestamp);
     });
-    console.log("[Recovery] Rebuilt photo histories from available resources.");
+    console.log("[Recovery] Rebuilt photo histories. Persisting results to DB...");
+    
+    // [전문가 제안 반영] 힐링된 결과를 DB에 즉시 영구 저장하여 인스턴스 재시작 시 엑박 재발 방지
+    try {
+      // 순환 참조 방지를 위해 saveDB가 아닌 최소한의 Firestore 업데이트 직접 수행
+      await db.collection(SETTINGS_COLLECTION).doc(SETTINGS_DOC).update({
+        photo_histories: data.photo_histories
+      });
+      console.log("[Recovery] Successfully persisted healed data to Firestore.");
+    } catch (e) {
+      console.error("[Recovery] Failed to persist healed data:", e);
+    }
   }
 
   return data;

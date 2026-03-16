@@ -446,7 +446,8 @@ ${processedPersona}${styleNote}
                     id: `rest-${Date.now()}`,
                     name: placeName,
                     location: { lat: loc.lat(), lng: loc.lng() },
-                    type: String(placeName).toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction'
+                    type: String(placeName).toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction',
+                    placeId: sortedResults[0].place_id
                   };
                   setState(prev => ({
                     ...prev,
@@ -493,7 +494,8 @@ ${processedPersona}${styleNote}
                   id: `tag-${Date.now()}-${Math.random()}`,
                   name: name,
                   location: { lat: loc.lat(), lng: loc.lng() },
-                  type: name.toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction'
+                  type: name.toLowerCase().match(/restaurant|cafe|bar|pub/) ? 'restaurant' : 'attraction',
+                  placeId: sortedResults[0].place_id
                 };
                 setState(prev => ({
                   ...prev,
@@ -540,7 +542,11 @@ ${processedPersona}${styleNote}
                 const newLoc = { lat: loc.lat(), lng: loc.lng() };
                 setState(inner => ({
                   ...inner,
-                  nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { ...p, location: newLoc } : p)
+                  nearbyPlaces: inner.nearbyPlaces.map(p => p.id === placeId ? { 
+                    ...p, 
+                    location: newLoc,
+                    placeId: results[0].place_id
+                  } : p)
                 }));
               }
               // 300ms 대기 후 다음 청크 처리
@@ -632,10 +638,14 @@ ${processedPersona}${styleNote}
             const loc = results[0].geometry.location;
             const newPos = { lat: loc.lat(), lng: loc.lng() };
             
-            // 좌표 업데이트
+            // 좌표 및 Place ID 업데이트
             setState(inner => ({
               ...inner,
-              nearbyPlaces: inner.nearbyPlaces.map(p => p.name === name ? { ...p, location: newPos } : p)
+              nearbyPlaces: inner.nearbyPlaces.map(p => p.name === name ? { 
+                ...p, 
+                location: newPos,
+                placeId: results[0].place_id
+              } : p)
             }));
 
             // 지도를 해당 장소로 즉시 이동 및 핀 찍기 효과

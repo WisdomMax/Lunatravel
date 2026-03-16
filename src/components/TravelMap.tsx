@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map, Marker, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useTravel } from '../context/TravelContext';
-import { Search, MapPin, Loader2, Navigation, Utensils, Camera, ExternalLink, ChevronLeft, Map as MapIcon, Heart, Wand2 } from 'lucide-react';
+import { Search, MapPin, Loader2, Navigation, Utensils, Camera, ExternalLink, ChevronLeft, Map as MapIcon, Wand2, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_ZOOM } from '../constants';
 import BgmControl from './BgmControl';
@@ -222,6 +222,44 @@ export default function TravelMap() {
                   formatted_address: place.address || '',
                   types: [place.type === 'restaurant' ? 'restaurant' : 'point_of_interest']
                 } as any);
+
+                 // AI 추천 장소인데 사진이 없는 경우, 구글 맵 Places Service로 사진 정보 보충 시도
+                 if ((!place.photos || place.photos.length === 0) && typeof google !== 'undefined' && google.maps?.places && map) {
+                   const service = new google.maps.places.PlacesService(map);
+                   
+                   const fetchDetails = (id: string) => {
+                     service.getDetails({
+                       placeId: id,
+                       fields: ['photos', 'rating', 'user_ratings_total', 'formatted_address']
+                     }, (details, detailStatus) => {
+                       if (detailStatus === google.maps.places.PlacesServiceStatus.OK && details) {
+                         setSelectedPlace((prev: any) => prev && prev.name === place.name ? {
+                           ...prev,
+                           photos: details.photos || [],
+                           rating: details.rating || prev.rating,
+                           user_ratings_total: details.user_ratings_total,
+                           formatted_address: details.formatted_address || prev.formatted_address
+                         } : prev);
+                       }
+                     });
+                   };
+
+                   if (place.placeId) {
+                     // 이미 Place ID가 있는 경우 즉시 상세 정보(사진) 조회
+                     fetchDetails(place.placeId);
+                   } else {
+                     // ID가 없는 경우만 검색으로 획득 시도 (폴백)
+                     service.findPlaceFromQuery({
+                       query: place.name,
+                       fields: ['place_id'],
+                       locationBias: state.currentLocation
+                     }, (results, status) => {
+                       if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]?.place_id) {
+                         fetchDetails(results[0].place_id);
+                       }
+                     });
+                   }
+                 }
               }}
             >
               <div className="group relative cursor-pointer">
@@ -384,6 +422,16 @@ export default function TravelMap() {
                       Go there <ChevronLeft className="w-2 h-2 rotate-180" />
                     </p>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addBookmark(place.location);
+                    }}
+                    className="p-2 text-pink-300 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all"
+                    title="Add to bookmarks"
+                  >
+                    <Heart className="w-4 h-4" />
+                  </button>
                 </button>
               ))}
             </div>
@@ -431,13 +479,6 @@ export default function TravelMap() {
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pin</p>
                 <p className="text-xs font-bold text-slate-900 truncate">{selectedPlace?.name || state.currentLocation.name}</p>
               </div>
-              <button
-                onClick={() => addBookmark(selectedPlace?.location || state.currentLocation)}
-                className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
-                title="Save Place"
-              >
-                <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === (selectedPlace?.name || state.currentLocation.name)) ? 'fill-pink-500' : ''}`} />
-              </button>
             </div>
           </motion.div>
         )}
@@ -456,13 +497,6 @@ export default function TravelMap() {
                 <MapPin className="text-pink-600 w-3.5 h-3.5" />
               </div>
               <p className="text-sm font-semibold text-slate-800 max-w-[300px] truncate">{state.currentLocation.name}</p>
-              <button
-                onClick={() => addBookmark(state.currentLocation)}
-                className="p-1.5 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
-                title="Save Place"
-              >
-                <Heart className={`w-4 h-4 ${state.bookmarks.some(b => b.name === state.currentLocation.name) ? 'fill-pink-500' : ''}`} />
-              </button>
             </div>
           </motion.div>
         )}
@@ -493,36 +527,33 @@ export default function TravelMap() {
             exit={{ opacity: 0, x: 20 }}
             className="absolute top-24 right-6 z-50 w-[320px] bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col pointer-events-auto"
           >
-            <div className="relative h-48 bg-slate-100">
-              {selectedPlace.photos && selectedPlace.photos.length > 0 ? (
+            {selectedPlace.photos && selectedPlace.photos.length > 0 && (
+              <div className="relative h-48 bg-slate-100">
                 <img 
                   src={selectedPlace.photos[0].getUrl ? selectedPlace.photos[0].getUrl({ maxWidth: 400 }) : selectedPlace.photos[0]} 
                   alt={selectedPlace.name}
                   className="w-full h-full object-cover"
                 />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2">
-                  <Camera className="w-8 h-8 opacity-20" />
-                  <p className="text-[10px] uppercase tracking-widest font-black">No Preview Memory</p>
-                </div>
-              )}
-              <button 
-                onClick={() => setSelectedPlace(null)}
-                className="absolute top-4 right-4 w-8 h-8 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all active:scale-90"
-              >
-                ×
-              </button>
-            </div>
+                <button 
+                  onClick={() => setSelectedPlace(null)}
+                  className="absolute top-4 right-4 w-8 h-8 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all active:scale-90"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             <div className="p-6">
               <div className="flex justify-between items-start gap-2 mb-2">
                 <h3 className="text-xl font-black text-slate-900 leading-tight">{selectedPlace.name}</h3>
-                <button
-                  onClick={() => addBookmark(selectedPlace.location)}
-                  className="p-2 text-pink-500 hover:bg-pink-50 rounded-xl transition-all active:scale-90"
-                >
-                  <Heart className={`w-5 h-5 ${state.bookmarks.some(b => b.name === selectedPlace.name) ? 'fill-pink-500' : ''}`} />
-                </button>
+                {!selectedPlace.photos || selectedPlace.photos.length === 0 ? (
+                  <button 
+                    onClick={() => setSelectedPlace(null)}
+                    className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-all active:scale-90"
+                  >
+                    ×
+                  </button>
+                ) : null}
               </div>
 
               {selectedPlace.rating && (
