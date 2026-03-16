@@ -6,13 +6,16 @@
 ## 🌍 [English] Project Overview
 Luna Travel is an emotional AI companion service that combines the **Gemini 2.5 Multimodal Live API** with **Google Maps**. Beyond just providing information, it offers a new experience of traveling the world virtually, having real-time conversations, and capturing memories through AI-synthesized photos.
 
+## 🏗️ System Architecture
+![Luna Travel Architecture](./architecture_diagram.png)
+
 ## 🛠️ Technical Stack (Tech Proof)
 Our project deeply utilizes Google's latest tech stack:
 
 ### 1. AI & Multimodal Engine
-- **Gemini 2.5 Live**: High-quality real-time audio streaming and multimodal interaction.
-- **Gemini 2.5 Flash**: High-performance image synthesis pipeline combining Street View and user photos.
-- **Gemini 2.5 Flash Lite**: Persona refinement and system instruction expansion.
+- **Gemini 2.5 Live (Multimodal)**: High-speed real-time interaction loop for natural dialogue and map control.
+- **Gemini 3.1 Flash (Image Synthesis)**: Specialized pipeline using **Gemini 3.1** (Nano Banana) for professional-grade DSLR photo synthesis blending Street View and portraits.
+- **Gemini 3.1 Flash Lite**: Advanced persona management and character-specific isolation.
 
 ### 2. Map & Geospatial
 - **Google Maps JavaScript API**: Real-time location tracking and POI integration.
@@ -39,9 +42,9 @@ Our project deeply utilizes Google's latest tech stack:
 Luna Travel은 **Gemini 2.5 Multimodal Live API**와 **Google Maps**를 결합하여, 실시간으로 대화하며 함께 세계를 여행하는 감성적인 AI 동반자 서비스입니다.
 
 ### 🛠️ 기술 스택
-- **AI**: Gemini 2.5 Live (실시간 대화), Gemini 2.5 Flash (이미지 합성)
-- **Maps**: 위치 추적 및 스트리트뷰 연동
-- **Infra**: Google Cloud Run, Cloud Storage, Firestore (실시간 동기화)
+- **AI Engine**: Gemini 2.5 Live (실시간 인터랙션), **Gemini 3.1 Flash** (고화질 이미지 합성)
+- **Maps Ecosystem**: Google Maps JS SDK, Street View Static API 연동
+- **Core Infra**: Google Cloud Run, Cloud Storage, Firestore (Hybrid Persistence)
 
 ### 🚀 실행 방법 (How to Run)
 1. `npm install`
