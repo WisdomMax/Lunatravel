@@ -76,4 +76,4 @@ Luna Travel은 **Gemini 2.5 Multimodal Live API**와 **Google Maps**를 결합�
 
 ## 📸 Demo & Walkthrough
 Detailed screenshots and recordings: [walkthrough.md](./walkthrough.md)
-Final Deployment: [https://luna-travel-q5ojdxnhqq-du.a.run.app](https://luna-travel-q5ojdxnhqq-du.a.run.app)
+Final Deployment: [https://luna-travel-513687662188.asia-northeast3.run.app](https://luna-travel-513687662188.asia-northeast3.run.app)
