@@ -30,6 +30,7 @@ export interface TravelState {
   history: Message[];
   isThinking: boolean;
   isSpeaking: boolean;
+  toast: { message: string; type: 'success' | 'info' } | null;
   nearbyPlaces: Place[];
   viewMode: 'map' | 'streetview';
   searchQuery?: string;

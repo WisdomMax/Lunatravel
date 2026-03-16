@@ -33,6 +33,31 @@ function GlobalModal() {
   );
 }
 
+import { motion, AnimatePresence } from 'framer-motion';
+
+function ToastUI() {
+  const { state } = useTravel();
+  return (
+    <AnimatePresence>
+      {state.toast && (
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.9 }}
+          className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] perspective-1000"
+        >
+          <div className="bg-pink-600 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-pink-400/30 backdrop-blur-md">
+            <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+            </div>
+            <span className="font-black text-sm tracking-tight">{state.toast.message}</span>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 type AppView = 'setup' | 'app';
 
 function TravelApp({ apiKey, onBack }: { apiKey: string, onBack: () => void }) {
@@ -84,6 +109,7 @@ export default function App() {
     <TravelProvider>
       <BgmPlayer view={view} />
       <GlobalModal />
+      <ToastUI />
       {/* API Key Input Screen */}
       {!apiKey && (
         <div className="flex items-center justify-center min-h-screen w-screen bg-slate-900 p-8 relative overflow-hidden">

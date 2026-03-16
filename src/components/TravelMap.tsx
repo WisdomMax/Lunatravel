@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map, Marker, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useTravel } from '../context/TravelContext';
+import { Location, Place } from '../types';
 import { Search, MapPin, Loader2, Navigation, Utensils, Camera, ExternalLink, ChevronLeft, Map as MapIcon, Wand2, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_ZOOM } from '../constants';
@@ -29,6 +30,14 @@ export default function TravelMap() {
       (window as any).gm_authFailure = undefined;
     };
   }, [setBgmMode]);
+
+  // ── Helpers ──────────────────────────────────────────────────
+  const isBookmarked = useCallback((loc: Location) => {
+    return state.bookmarks.some(b => 
+      Math.abs(b.location.lat - loc.lat) < 0.0001 && 
+      Math.abs(b.location.lng - loc.lng) < 0.0001
+    );
+  }, [state.bookmarks]);
 
   // ── Search Handler ──────────────────────────────────────────────
   const handleSearch = useCallback(() => {
@@ -168,6 +177,59 @@ export default function TravelMap() {
     moveTo({ lat, lng });
   }, [moveTo]);
 
+  // ── Place Selection & Photo Fetching ──────────────────────────
+  const handleSelectPlace = useCallback((place: any) => {
+    const loc = place.location;
+    
+    // 1. 기본 정보 즉시 가상 설정 (반응성)
+    setSelectedPlace({
+      name: place.name,
+      location: loc,
+      rating: place.rating,
+      photos: place.photos || [],
+      formatted_address: place.address || '',
+      types: [place.type === 'restaurant' ? 'restaurant' : 'point_of_interest']
+    });
+
+    moveTo(loc, place.name, false);
+
+    // 2. 사진이 없거나 보충이 필요한 경우 Google Places Service 호출
+    if ((!place.photos || place.photos.length === 0) && typeof google !== 'undefined' && google.maps?.places && map) {
+      const service = new google.maps.places.PlacesService(map);
+      
+      const fetchDetails = (id: string) => {
+        service.getDetails({
+          placeId: id,
+          fields: ['photos', 'rating', 'user_ratings_total', 'formatted_address']
+        }, (details, detailStatus) => {
+          if (detailStatus === google.maps.places.PlacesServiceStatus.OK && details) {
+            setSelectedPlace((prev: any) => prev && prev.name === place.name ? {
+              ...prev,
+              photos: details.photos || [],
+              rating: details.rating || prev.rating,
+              user_ratings_total: details.user_ratings_total,
+              formatted_address: details.formatted_address || prev.formatted_address
+            } : prev);
+          }
+        });
+      };
+
+      if (place.placeId) {
+        fetchDetails(place.placeId);
+      } else {
+        service.findPlaceFromQuery({
+          query: place.name,
+          fields: ['place_id'],
+          locationBias: state.currentLocation
+        }, (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]?.place_id) {
+            fetchDetails(results[0].place_id);
+          }
+        });
+      }
+    }
+  }, [map, moveTo, state.currentLocation]);
+
   if (mapError) {
     return (
       <div className="flex items-center justify-center h-full bg-slate-50 p-8">
@@ -213,53 +275,7 @@ export default function TravelMap() {
               position={place.location}
               onClick={(e: any) => {
                 if (e.stop) e.stop(); // 이벤트 전파 방지
-                moveTo(place.location, place.name, false);
-                setSelectedPlace({
-                  name: place.name,
-                  location: place.location,
-                  rating: place.rating,
-                  photos: place.photos,
-                  formatted_address: place.address || '',
-                  types: [place.type === 'restaurant' ? 'restaurant' : 'point_of_interest']
-                } as any);
-
-                 // AI 추천 장소인데 사진이 없는 경우, 구글 맵 Places Service로 사진 정보 보충 시도
-                 if ((!place.photos || place.photos.length === 0) && typeof google !== 'undefined' && google.maps?.places && map) {
-                   const service = new google.maps.places.PlacesService(map);
-                   
-                   const fetchDetails = (id: string) => {
-                     service.getDetails({
-                       placeId: id,
-                       fields: ['photos', 'rating', 'user_ratings_total', 'formatted_address']
-                     }, (details, detailStatus) => {
-                       if (detailStatus === google.maps.places.PlacesServiceStatus.OK && details) {
-                         setSelectedPlace((prev: any) => prev && prev.name === place.name ? {
-                           ...prev,
-                           photos: details.photos || [],
-                           rating: details.rating || prev.rating,
-                           user_ratings_total: details.user_ratings_total,
-                           formatted_address: details.formatted_address || prev.formatted_address
-                         } : prev);
-                       }
-                     });
-                   };
-
-                   if (place.placeId) {
-                     // 이미 Place ID가 있는 경우 즉시 상세 정보(사진) 조회
-                     fetchDetails(place.placeId);
-                   } else {
-                     // ID가 없는 경우만 검색으로 획득 시도 (폴백)
-                     service.findPlaceFromQuery({
-                       query: place.name,
-                       fields: ['place_id'],
-                       locationBias: state.currentLocation
-                     }, (results, status) => {
-                       if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]?.place_id) {
-                         fetchDetails(results[0].place_id);
-                       }
-                     });
-                   }
-                 }
+                handleSelectPlace(place);
               }}
             >
               <div className="group relative cursor-pointer">
@@ -399,17 +415,7 @@ export default function TravelMap() {
               {state.nearbyPlaces.map((place) => (
                 <button
                   key={place.id}
-                  onClick={() => {
-                    moveTo(place.location, place.name, false);
-                    setSelectedPlace({
-                      name: place.name,
-                      location: place.location,
-                      rating: place.rating,
-                      photos: place.photos,
-                      formatted_address: place.address || '',
-                      types: [place.type === 'restaurant' ? 'restaurant' : 'point_of_interest']
-                    } as any);
-                  }}
+                  onClick={() => handleSelectPlace(place)}
                   className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-md border border-white/20 flex items-center gap-3 text-left hover:bg-white transition-all active:scale-[0.98] group"
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${place.type === 'restaurant' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
@@ -422,16 +428,22 @@ export default function TravelMap() {
                       Go there <ChevronLeft className="w-2 h-2 rotate-180" />
                     </p>
                   </div>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      addBookmark(place.location);
+                      addBookmark(place.location, place.name);
                     }}
-                    className="p-2 text-pink-300 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all"
+                    className={`p-2 rounded-xl transition-all ${
+                      isBookmarked(place.location) 
+                        ? 'text-pink-600 bg-pink-50' 
+                        : 'text-pink-300 hover:text-pink-600 hover:bg-pink-50'
+                    }`}
                     title="Add to bookmarks"
                   >
-                    <Heart className="w-4 h-4" />
-                  </button>
+                    <Heart className={`w-4 h-4 ${isBookmarked(place.location) ? 'fill-current' : ''}`} />
+                  </motion.button>
                 </button>
               ))}
             </div>
@@ -479,6 +491,24 @@ export default function TravelMap() {
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pin</p>
                 <p className="text-xs font-bold text-slate-900 truncate">{selectedPlace?.name || state.currentLocation.name}</p>
               </div>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const loc = selectedPlace?.location || state.currentLocation;
+                    const name = selectedPlace?.name || state.currentLocation.name;
+                    addBookmark(loc, name);
+                  }}
+                  className={`p-2 rounded-xl transition-all ml-auto ${
+                    isBookmarked(selectedPlace?.location || state.currentLocation) 
+                      ? 'text-pink-600 bg-pink-50' 
+                      : 'text-pink-300 hover:text-pink-600 hover:bg-pink-50'
+                  }`}
+                  title="Add to bookmarks"
+                >
+                  <Heart className={`w-4 h-4 ${isBookmarked(selectedPlace?.location || state.currentLocation) ? 'fill-current' : ''}`} />
+                </motion.button>
             </div>
           </motion.div>
         )}
@@ -497,6 +527,22 @@ export default function TravelMap() {
                 <MapPin className="text-pink-600 w-3.5 h-3.5" />
               </div>
               <p className="text-sm font-semibold text-slate-800 max-w-[300px] truncate">{state.currentLocation.name}</p>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addBookmark(state.currentLocation, state.currentLocation.name);
+                }}
+                className={`p-2 rounded-xl transition-all ${
+                  isBookmarked(state.currentLocation) 
+                    ? 'text-pink-600 bg-pink-50' 
+                    : 'text-pink-300 hover:text-pink-600 hover:bg-pink-50'
+                }`}
+                title="Add to bookmarks"
+              >
+                <Heart className={`w-4 h-4 ${isBookmarked(state.currentLocation) ? 'fill-current' : ''}`} />
+              </motion.button>
             </div>
           </motion.div>
         )}

@@ -44,38 +44,46 @@ const SETTINGS_DOC = "global_state";
  * 클라우드 환경(GCS 사용 가능)이면 GCS로, 로컬 환경(권한 없음)이면 로컬 FS로 저장합니다.
  */
 async function saveImage(buffer: Buffer, fileName: string, contentType: string, folder: "uploads" | "photos" = "uploads") {
-  const isCloud = process.env.NODE_ENV === 'production';
+  // [강화] Cloud Run 및 GCP 표준 환경 변수 전수 체크
+  const isCloud = process.env.NODE_ENV === 'production' || 
+                  !!process.env.K_SERVICE || 
+                  !!process.env.GOOGLE_CLOUD_PROJECT || 
+                  !!process.env.GCP_PROJECT_ID;
   
-  if (isCloud || process.env.K_SERVICE) {
+  console.log(`[Storage] Storage request for ${fileName} (isCloud: ${isCloud})`);
+
+  if (isCloud) {
     try {
       const file = bucket.file(`${folder}/${fileName}`);
+      console.log(`[Cloud] Uploading to GCS bucket: ${bucket.name}/${folder}/${fileName}`);
+      
       await file.save(buffer, {
         metadata: { contentType },
-        resumable: false // 작은 파일이므로 resumable 비활성화
+        resumable: false
       });
       
-      // [보완] 명시적으로 공개 권한 부여 (버킷 정책이 Uniform이 아닐 경우 필수)
+      // 버킷 정책에 따라 공개 권한 부여 시도
       try {
         await file.makePublic();
       } catch (e) {
-        console.warn(`[Cloud] makePublic failed for ${fileName}, but continuing...`);
+        console.warn(`[Cloud] Optional makePublic failed for ${fileName} (Bucket might be Uniform):`, e instanceof Error ? e.message : e);
       }
 
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${folder}/${fileName}`;
-      console.log(`[Cloud] Saved to GCS: ${publicUrl}`);
+      console.log(`[Cloud] Successfully saved to GCS: ${publicUrl}`);
       return publicUrl;
     } catch (error) {
-      console.error("[Cloud] CRITICAL: GCS Upload failed.", error);
-      // 전문가 조언: Cloud Run에서는 로컬 저장이 의미가 없으므로 에러를 던져서 상위에서 처리하게 함
-      throw new Error(`GCS Upload Failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("[Cloud] CRITICAL: GCS Integration FAILED.", error);
+      // 클라우드에서는 로컬 저장이 불가능하므로 에러를 전파하여 상위에서 토스트 등으로 알림
+      throw new Error(`GCS 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 권한 오류"}`);
     }
   }
 
-  // Local/Fallback logic
+  // Local/Dev 환경 (클라우드가 아닐 때만 작동)
+  console.log(`[Local] Development mode detected. Saving to local filesystem...`);
   const localPath = path.join(__dirname, "public", folder, fileName);
   await fs.mkdir(path.dirname(localPath), { recursive: true });
   await fs.writeFile(localPath, buffer);
-  console.log(`[Local] Saved to FS: ${folder}/${fileName}`);
   return `/${folder}/${fileName}`;
 }
 
@@ -121,11 +129,14 @@ async function getDB() {
     const existingIndex = data.photo_histories[key].findIndex((p: any) => p.id === timestampStr);
 
     if (existingIndex >= 0) {
-      // 이미 존재하는데 URL이 로컬 경로(/photos/...)이고 현재 전달된게 GCS 경로라면 업데이트
-      if (data.photo_histories[key][existingIndex].url.startsWith('/photos/') && publicUrl.startsWith('http')) {
+      // [강화] 클라우드 환경이고 전달된게 GCS 경로라면, 기존 경로가 무엇이든 GCS로 강제 업데이트 (치유 우선)
+      const isGcsUrl = publicUrl.startsWith('http');
+      const currentUrl = data.photo_histories[key][existingIndex].url;
+      
+      if (isGcsUrl && (currentUrl.startsWith('/photos/') || !currentUrl.includes('storage.googleapis.com'))) {
         data.photo_histories[key][existingIndex].url = publicUrl;
         wasModified = true;
-        console.log(`[Healing] Updated ${timestampStr} to GCS URL: ${publicUrl}`);
+        console.log(`[Healing] Forced ${timestampStr} to GCS URL: ${publicUrl}`);
       }
     } else {
       // 아예 없는 경우 새로 추가

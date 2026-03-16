@@ -70,6 +70,7 @@ const getInitialState = (): TravelState => {
     lunaPhotos: {},
     customType: (localStorage.getItem('custom_type') as any) || 'female',
     isInitialized: false,
+    toast: null,
   };
 
   if (saved) {
@@ -875,7 +876,11 @@ ${processedPersona}${styleNote}
       });
     } catch (error: any) {
       console.error("Take photo error:", error);
-      setState(prev => ({ ...prev, isGeneratingPhoto: false }));
+      setState(prev => ({
+        ...prev,
+        isGeneratingPhoto: false,
+        toast: { message: `사진 촬영 실패: ${error.message || "알 수 없는 오류"}`, type: 'error' }
+      }));
       
       showModal({
         title: "Photo Capture Failed",
@@ -912,14 +917,14 @@ ${processedPersona}${styleNote}
     }
   }, []);
 
-  const addBookmark = useCallback(async (location: Location) => {
+  const addBookmark = useCallback(async (location: Location, name?: string) => {
     try {
       const response = await fetch('/api/bookmarks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookmark: {
-            name: location.name || 'Saved Location',
+            name: name || location.name || 'Saved Location',
             location,
             type: 'other'
           }
@@ -928,7 +933,16 @@ ${processedPersona}${styleNote}
 
       if (response.ok) {
         const { bookmarks } = await response.json();
-        setState(prev => ({ ...prev, bookmarks }));
+        setState(prev => ({ 
+          ...prev, 
+          bookmarks,
+          toast: { message: `"${name || location.name || '장소'}" 저장 완료! ❤️`, type: 'success' }
+        }));
+        
+        // 3초 후 토스트 제거
+        setTimeout(() => {
+          setState(prev => ({ ...prev, toast: null }));
+        }, 3000);
       }
     } catch (err) {
       console.error("Add bookmark error:", err);

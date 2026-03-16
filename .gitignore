@@ -8,9 +8,19 @@ db.json
 public/photos/*
 public/uploads/*
 
-# Test files
+# Backups and SDKs (Security)
+backups/
+google-cloud-sdk/
+google-cloud-cli-*.tar.gz
+.gcloudignore
+
+# Test files and scripts
 test_*.ts
 test_*.cjs
+generate_*.cjs
+list_models.ts
+models_output.txt
+test_*.ts
 
 # Build
 dist

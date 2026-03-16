@@ -590,13 +590,27 @@ export default function TravelSidebar({ onBack }: TravelSidebarProps) {
                           <p className="text-[9px] text-pink-400 font-bold mt-0.5 opacity-60">추천된 명소</p>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => addBookmark(place.location)}
-                            className="p-2 text-pink-300 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all"
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => addBookmark(place.location, place.name)}
+                            className={`p-2 rounded-xl transition-all ${
+                              state.bookmarks.some(b => 
+                                Math.abs(b.location.lat - place.location.lat) < 0.0001 && 
+                                Math.abs(b.location.lng - place.location.lng) < 0.0001
+                              )
+                                ? 'text-pink-600 bg-pink-50' 
+                                : 'text-pink-300 hover:text-pink-600 hover:bg-pink-50'
+                            }`}
                             title="Add to bookmarks"
                           >
-                            <Heart className="w-4 h-4" />
-                          </button>
+                            <Heart className={`w-4 h-4 ${
+                              state.bookmarks.some(b => 
+                                Math.abs(b.location.lat - place.location.lat) < 0.0001 && 
+                                Math.abs(b.location.lng - place.location.lng) < 0.0001
+                              ) ? 'fill-current' : ''
+                            }`} />
+                          </motion.button>
                           <button
                             onClick={() => moveTo(place.location, place.name, false)}
                             className="p-2 text-slate-400 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all"
